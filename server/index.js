@@ -49,7 +49,7 @@ app.get("/health", (req, res) => {
 app.use('/api/auth', require('./routes/auth'));
 // app.use('/api/collectors', require('./routes/collectors'));
 // app.use('/api/buyers', require('./routes/buyers'));
-// app.use('/api/waste-logs', require('./routes/wasteLogs'));
+app.use('/api/waste-logs', require('./routes/wasteLogs'));
 // app.use('/api/transactions', require('./routes/transactions'));
 // app.use('/api/ussd', require('./routes/ussd'));
 // app.use('/api/admin', require('./routes/admin'));
