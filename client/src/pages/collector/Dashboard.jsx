@@ -1,229 +1,217 @@
+// client/src/pages/collector/Dashboard.jsx
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import api from '../../api/axiosClient';
 
-const CATEGORIES = ['organic', 'plastic', 'metal', 'e-waste'];
-
-const statusColor = {
-  unmatched: '#f59e0b',
-  matched: '#3b82f6',
-  collected: '#10b981',
+const categoryIcon = {
+  plastic:  { icon: '🌿', bg: '#e8f5ec' },
+  organic:  { icon: '🍃', bg: '#f0fdf4' },
+  metal:    { icon: '⚙️', bg: '#eff6ff' },
+  'e-waste':{ icon: '💻', bg: '#faf5ff' },
 };
+
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  const hrs  = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 60)  return `${mins}m ago`;
+  if (hrs < 24)   return `Today, ${new Date(dateStr).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}`;
+  if (days === 1) return 'Yesterday';
+  return `${days} days ago`;
+}
 
 export default function CollectorDashboard() {
   const { user, logout } = useAuthStore();
-  const [logs, setLogs] = useState([]);
+  const navigate = useNavigate();
+  const [logs, setLogs]       = useState([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-
-  const [form, setForm] = useState({
-    category: 'plastic',
-    weight_kg: '',
-    latitude: '',
-    longitude: '',
-    notes: '',
-  });
-
-  const fetchLogs = async () => {
-    try {
-      const res = await api.get('/waste-logs/my');
-      setLogs(res.data.logs);
-    } catch (err) {
-      console.error('Failed to fetch logs', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await api.get('/waste-logs/my');
-        setLogs(res.data.logs);
-      } catch (err) {
-        console.error('Failed to fetch logs', err);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    api.get('/waste-logs/my')
+      .then(res => setLogs(res.data.logs))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
   }, []);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+  const totalWeight = logs.reduce((s, l) => s + parseFloat(l.weight_kg || 0), 0);
+  const recentLogs  = [...logs]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 5);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    setSubmitting(true);
-
-    try {
-      await api.post('/waste-logs', {
-        category: form.category,
-        weight_kg: parseFloat(form.weight_kg),
-        latitude: form.latitude ? parseFloat(form.latitude) : undefined,
-        longitude: form.longitude ? parseFloat(form.longitude) : undefined,
-        notes: form.notes || undefined,
-      });
-
-      setSuccess('Waste log submitted successfully.');
-      setForm({ category: 'plastic', weight_kg: '', latitude: '', longitude: '', notes: '' });
-      fetchLogs();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to submit log');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const GREEN = '#1e6b3c';
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: 32, fontFamily: 'sans-serif' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
-        <div>
-          <h1 style={{ color: '#1e4d2b', margin: 0, fontSize: 22 }}>Collector Dashboard</h1>
-          <p style={{ margin: 0, color: '#666' }}>Welcome, {user?.name}</p>
+    <div style={{
+      minHeight: '100vh', background: '#f2f4f7',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      position: 'relative', paddingBottom: 100,
+    }}>
+
+      {/* ── Top bar ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 18px', background: '#fff',
+        boxShadow: '0 1px 0 #eee',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ color: GREEN, fontSize: 22 }}>♻</span>
+          <span style={{ fontWeight: 800, fontSize: 17, color: GREEN }}>WasteManagement</span>
         </div>
-        <button onClick={logout} style={{ padding: '8px 16px', cursor: 'pointer', borderRadius: 6, border: '1px solid #ccc' }}>
-          Logout
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <span style={{ fontSize: 20, cursor: 'pointer' }}>🔍</span>
+          <span style={{ fontSize: 20, cursor: 'pointer' }}>🔔</span>
+          <div onClick={logout} style={{
+            width: 36, height: 36, borderRadius: '50%',
+            background: '#ccc', overflow: 'hidden',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: 700, fontSize: 15, color: '#555', cursor: 'pointer',
+          }}>{user?.name?.charAt(0).toUpperCase() || 'C'}</div>
+        </div>
       </div>
 
-      {/* Log Waste Form */}
-      <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 24, marginBottom: 32 }}>
-        <h2 style={{ marginTop: 0, color: '#1e4d2b' }}>Log Waste</h2>
+      <div style={{ padding: '16px 14px' }}>
 
-        {error && <p style={{ color: '#dc2626', marginBottom: 12 }}>{error}</p>}
-        {success && <p style={{ color: '#16a34a', marginBottom: 12 }}>{success}</p>}
+        {/* ── Total Earnings card (hardcoded pending earnings endpoint) ── */}
+        <div style={{
+          background: '#fff', borderRadius: 16, padding: '18px 20px',
+          marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <div>
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#888', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 6px' }}>TOTAL EARNINGS</p>
+            <p style={{ fontSize: 24, fontWeight: 800, color: '#111', margin: '0 0 4px' }}>KES —</p>
+            <p style={{ fontSize: 12, color: '#888', margin: 0 }}>Pending earnings integration</p>
+          </div>
+          <div style={{ width: 50, height: 50, borderRadius: '50%', background: '#e6f9ef', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>💰</div>
+        </div>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Category</label>
-              <select
-                name="category"
-                value={form.category}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', boxSizing: 'border-box' }}
-              >
-                {CATEGORIES.map(c => (
-                  <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                ))}
-              </select>
+        {/* ── Total Weight card ── */}
+        <div style={{
+          background: '#fff', borderRadius: 16, padding: '18px 20px',
+          marginBottom: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <div>
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#888', letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 6px' }}>TOTAL WEIGHT</p>
+            <p style={{ fontSize: 24, fontWeight: 800, color: '#111', margin: '0 0 4px' }}>
+              {loading ? '—' : `${totalWeight.toFixed(1)} kg`}
+            </p>
+            <p style={{ fontSize: 12, color: '#888', margin: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span>⏱</span> Lifetime collection
+            </p>
+          </div>
+          <div style={{ width: 50, height: 50, borderRadius: '50%', background: '#f0eeff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>⏳</div>
+        </div>
+
+        {/* ── Level Up Journey ── */}
+        <div style={{
+          background: GREEN, borderRadius: 16, padding: '20px 20px 16px',
+          marginBottom: 16, position: 'relative', overflow: 'hidden',
+          boxShadow: '0 4px 16px rgba(30,107,60,0.25)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontWeight: 700, fontSize: 16, color: '#fff', margin: '0 0 6px' }}>Level Up Journey</p>
+              <p style={{ fontSize: 13, color: '#a8d5b8', margin: '0 0 20px', lineHeight: 1.4 }}>
+                Keep logging waste to earn points and unlock badges
+              </p>
+              <div style={{ height: 6, background: 'rgba(255,255,255,0.2)', borderRadius: 3, marginBottom: 8 }}>
+                <div style={{ height: '100%', width: '60%', background: '#4ade80', borderRadius: 3 }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12, color: '#a8d5b8' }}>Silver</span>
+                <span style={{ fontSize: 12, color: '#a8d5b8' }}>Gold</span>
+              </div>
             </div>
-
-            <div>
-              <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Weight (kg)</label>
-              <input
-                type="number"
-                name="weight_kg"
-                value={form.weight_kg}
-                onChange={handleChange}
-                placeholder="e.g. 5.5"
-                min="0.01"
-                step="0.01"
-                required
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', boxSizing: 'border-box' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Latitude <span style={{ color: '#9ca3af' }}>(optional)</span></label>
-              <input
-                type="number"
-                name="latitude"
-                value={form.latitude}
-                onChange={handleChange}
-                placeholder="-1.2921"
-                step="any"
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', boxSizing: 'border-box' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Longitude <span style={{ color: '#9ca3af' }}>(optional)</span></label>
-              <input
-                type="number"
-                name="longitude"
-                value={form.longitude}
-                onChange={handleChange}
-                placeholder="36.8219"
-                step="any"
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', boxSizing: 'border-box' }}
-              />
+            <div style={{
+              width: 58, height: 58, borderRadius: '50%',
+              background: '#4ade80', marginLeft: 16, flexShrink: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              color: GREEN, fontWeight: 800, fontSize: 13,
+            }}>
+              <span>—</span>
+              <span style={{ fontSize: 10 }}>PTS</span>
             </div>
           </div>
+        </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>Notes <span style={{ color: '#9ca3af' }}>(optional)</span></label>
-            <textarea
-              name="notes"
-              value={form.notes}
-              onChange={handleChange}
-              placeholder="Any additional details..."
-              rows={3}
-              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', boxSizing: 'border-box', resize: 'vertical' }}
-            />
-          </div>
+        {/* ── Recent Activities ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <span style={{ fontWeight: 700, fontSize: 16, color: '#111' }}>Recent Activities</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: GREEN, cursor: 'pointer', letterSpacing: 0.5 }}>VIEW ALL</span>
+        </div>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            style={{ padding: '10px 24px', background: '#1e4d2b', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}
-          >
-            {submitting ? 'Submitting...' : 'Submit Log'}
-          </button>
-        </form>
+        <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden', marginBottom: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          {loading ? (
+            <p style={{ padding: 20, color: '#aaa', textAlign: 'center' }}>Loading...</p>
+          ) : recentLogs.length === 0 ? (
+            <p style={{ padding: 20, color: '#aaa', textAlign: 'center' }}>
+              No logs yet. Tap + to submit your first waste log.
+            </p>
+          ) : (
+            recentLogs.map((log, i) => {
+              const cat = categoryIcon[log.category] || { icon: '♻', bg: '#f0fdf4' };
+              return (
+                <div key={log.log_id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '14px 16px',
+                  borderBottom: i < recentLogs.length - 1 ? '1px solid #f5f5f5' : 'none',
+                }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 10,
+                    background: cat.bg, display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', fontSize: 20, flexShrink: 0,
+                  }}>{cat.icon}</div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontWeight: 600, fontSize: 14, margin: '0 0 3px', color: '#111' }}>
+                      {log.category.charAt(0).toUpperCase() + log.category.slice(1)} Collection
+                    </p>
+                    <p style={{ fontSize: 12, color: '#888', margin: 0 }}>
+                      {log.notes || '—'} • {parseFloat(log.weight_kg).toFixed(1)} kg
+                    </p>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: GREEN, margin: '0 0 3px' }}>
+                      {parseFloat(log.weight_kg).toFixed(1)} kg
+                    </p>
+                    <p style={{ fontSize: 11, color: '#aaa', margin: 0 }}>
+                      {timeAgo(log.created_at)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* ── Support card ── */}
+        <div style={{
+          background: '#fff', borderRadius: 16, padding: '20px',
+          textAlign: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+        }}>
+          <div style={{ fontSize: 28, marginBottom: 6 }}>❓</div>
+          <p style={{ fontWeight: 700, fontSize: 14, margin: '0 0 2px', color: '#111' }}>Support</p>
+          <p style={{ fontSize: 12, color: '#888', margin: 0 }}>Get Assistance</p>
+        </div>
+
       </div>
 
-      {/* Logs Table */}
-      <div>
-        <h2 style={{ color: '#1e4d2b' }}>My Waste Logs</h2>
-        {loading ? (
-          <p>Loading...</p>
-        ) : logs.length === 0 ? (
-          <p style={{ color: '#6b7280' }}>No logs yet. Submit your first waste log above.</p>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#f3f4f6', textAlign: 'left' }}>
-                <th style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>Category</th>
-                <th style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>Weight (kg)</th>
-                <th style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>Status</th>
-                <th style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>Date</th>
-                <th style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map(log => (
-                <tr key={log.log_id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={{ padding: '10px 12px', textTransform: 'capitalize' }}>{log.category}</td>
-                  <td style={{ padding: '10px 12px' }}>{log.weight_kg}</td>
-                  <td style={{ padding: '10px 12px' }}>
-                    <span style={{
-                      background: statusColor[log.status] + '20',
-                      color: statusColor[log.status],
-                      padding: '2px 10px',
-                      borderRadius: 12,
-                      fontSize: 13,
-                      fontWeight: 500,
-                    }}>
-                      {log.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: '10px 12px', color: '#6b7280', fontSize: 13 }}>
-                    {new Date(log.created_at).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </td>
-                  <td style={{ padding: '10px 12px', color: '#6b7280', fontSize: 13 }}>{log.notes || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {/* ── FAB ── */}
+      <button
+        onClick={() => navigate('/collector/log-new')}
+        style={{
+          position: 'fixed', bottom: 28, right: 20,
+          width: 56, height: 56, borderRadius: '50%',
+          background: GREEN, color: '#fff', border: 'none',
+          fontSize: 30, cursor: 'pointer',
+          boxShadow: '0 4px 16px rgba(30,107,60,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 200, fontWeight: 300,
+        }}
+      >+</button>
+
     </div>
   );
 }
