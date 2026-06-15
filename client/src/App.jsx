@@ -3,20 +3,20 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore, ROLE_DASHBOARDS } from './store/authStore';
 
 // Pages
-import Landing    from './pages/Landing';
-import Login      from './pages/Login';
-import Register   from './pages/Register';
+import Landing      from './pages/Landing';
+import Login        from './pages/Login';
+import Register     from './pages/Register';
 import Unauthorized from './pages/Unauthorized';
 
-// Role dashboards (stubbed for now — filled in later sprints)
+// Role dashboards
 import CollectorDashboard   from './pages/collector/Dashboard';
+import LogNew               from './pages/collector/LogNew';
 import BuyerDashboard       from './pages/buyer/Dashboard';
 import CoordinatorDashboard from './pages/coordinator/Dashboard';
 import AdminDashboard       from './pages/admin/Dashboard';
 
 import ProtectedRoute from './components/ProtectedRoute';
 
-// Redirects logged-in users away from public pages
 function PublicRoute({ children }) {
   const { isAuthenticated, user } = useAuthStore();
   if (isAuthenticated && user?.role) {
@@ -30,7 +30,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
 
-        {/* ── Public routes ───────────────────────────────── */}
+        {/* ── Public ── */}
         <Route path="/" element={
           <PublicRoute><Landing /></PublicRoute>
         }/>
@@ -42,35 +42,40 @@ export default function App() {
         }/>
         <Route path="/unauthorized" element={<Unauthorized />} />
 
-        {/* ── Protected: Collector ────────────────────────── */}
-        <Route path="/collector/*" element={
+        {/* ── Collector ── */}
+        <Route path="/collector" element={
           <ProtectedRoute roles={['collector']}>
             <CollectorDashboard />
           </ProtectedRoute>
         }/>
+        <Route path="/collector/log-new" element={
+          <ProtectedRoute roles={['collector']}>
+            <LogNew />
+          </ProtectedRoute>
+        }/>
 
-        {/* ── Protected: Buyer ────────────────────────────── */}
+        {/* ── Buyer ── */}
         <Route path="/buyer/*" element={
           <ProtectedRoute roles={['buyer']}>
             <BuyerDashboard />
           </ProtectedRoute>
         }/>
 
-        {/* ── Protected: Coordinator ──────────────────────── */}
+        {/* ── Coordinator ── */}
         <Route path="/coordinator/*" element={
           <ProtectedRoute roles={['coordinator']}>
             <CoordinatorDashboard />
           </ProtectedRoute>
         }/>
 
-        {/* ── Protected: Admin ────────────────────────────── */}
+        {/* ── Admin ── */}
         <Route path="/admin/*" element={
           <ProtectedRoute roles={['admin']}>
             <AdminDashboard />
           </ProtectedRoute>
         }/>
 
-        {/* ── Catch-all ───────────────────────────────────── */}
+        {/* ── Catch-all ── */}
         <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>
