@@ -105,14 +105,14 @@ const register = async (req, res, next) => {
 // POST /api/auth/login
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { phone_number, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
+    if (!phone_number || !password) {
+      return res.status(400).json({ error: "Phone number and password are required" });
     }
 
-    const result = await pool.query("SELECT * FROM users WHERE email = $1", [
-      email,
+    const result = await pool.query("SELECT * FROM users WHERE phone_number = $1", [
+      phone_number,
     ]);
 
     if (result.rows.length === 0) {

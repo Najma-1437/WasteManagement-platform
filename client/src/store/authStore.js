@@ -1,94 +1,70 @@
-// client/src/store/authStore.js
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import api from "../api/axiosClient";
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import api from '../api/axiosClient';
 
-// Role → dashboard path mapping
 export const ROLE_DASHBOARDS = {
-  collector: "/collector",
-  buyer: "/buyer",
-  coordinator: "/coordinator",
-  admin: "/admin",
+  collector:   '/collector',
+  buyer:       '/buyer',
+  coordinator: '/coordinator',
+  admin:       '/admin',
 };
 
 export const useAuthStore = create(
   persist(
     (set, get) => ({
-      user: null,
-      accessToken: null,
-      refreshToken: null,
-      isAuthenticated: false,
-      loading: false,
-      error: null,
+      user: null, accessToken: null, refreshToken: null,
+      isAuthenticated: false, loading: false, error: null,
 
-      // ── Login ───────────────────────────────────────────────
-      login: async (email, password) => {
+      login: async (phone_number, password) => {
         set({ loading: true, error: null });
         try {
-          const { data } = await api.post("/auth/login", { email, password });
+          const { data } = await api.post('/auth/login', { phone_number, password });
           set({
-            user: data.user,
-            accessToken: data.accessToken,
+            user: data.user, accessToken: data.accessToken,
             refreshToken: data.refreshToken,
-            isAuthenticated: true,
-            loading: false,
-            error: null,
+            isAuthenticated: true, loading: false,
           });
-          return data.user; // caller uses role to redirect
+          return data.user;
         } catch (err) {
-          const message =
-            err.response?.data?.error || "Login failed. Please try again.";
+          const message = err.response?.data?.error || 'Login failed.';
           set({ loading: false, error: message });
-          throw new Error(message, { cause: err });
+          throw new Error(message);
         }
       },
 
-      // ── Logout ──────────────────────────────────────────────
       logout: async () => {
         try {
-          await api.post("/auth/logout", { refreshToken: get().refreshToken });
-        } catch {
-          // Even if server call fails, clear local state
+          await api.post('/auth/logout', { refreshToken: get().refreshToken });
         } finally {
-          set({
-            user: null,
-            accessToken: null,
-            refreshToken: null,
-            isAuthenticated: false,
-            error: null,
-          });
+          set({ user: null, accessToken: null, refreshToken: null,
+                isAuthenticated: false, error: null });
         }
       },
 
-      // ── Register ────────────────────────────────────────────
       register: async (formData) => {
         set({ loading: true, error: null });
         try {
-          const { data } = await api.post("/auth/register", formData);
+          const { data } = await api.post('/auth/register', formData);
           set({ loading: false });
-          return data; // { message, userId }
+          return data;
         } catch (err) {
-          const message =
-            err.response?.data?.error ||
-            err.response?.data?.errors?.[0]?.msg ||
-            "Registration failed.";
+          const message = err.response?.data?.error
+            || err.response?.data?.errors?.[0]?.msg
+            || 'Registration failed.';
           set({ loading: false, error: message });
-          throw new Error(message, { cause: err });
+          throw new Error(message);
         }
       },
 
-      // ── Clear error ─────────────────────────────────────────
       clearError: () => set({ error: null }),
     }),
     {
-      name: "auth-storage", // localStorage key
+      name: 'auth-storage',
       partialize: (state) => ({
-        // Only persist these — never persist loading/error
-        user: state.user,
-        accessToken: state.accessToken,
+        user: state.user, accessToken: state.accessToken,
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
-    },
-  ),
+    }
+  )
 );
