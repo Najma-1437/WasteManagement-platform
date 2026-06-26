@@ -1,70 +1,39 @@
-const express = require("express");
-const cors = require("cors");
-const dotenv = require("dotenv");
-
-// Load environment variables from root .env
-dotenv.config();
-
-console.log("JWT_SECRET:", process.env.JWT_SECRET ? "loaded" : "MISSING");
-console.log(
-  "JWT_REFRESH_SECRET:",
-  process.env.JWT_REFRESH_SECRET ? "loaded" : "MISSING",
-);
-
-
-// Database connection
-require('./config/db');
+require('dotenv').config();
+const express = require('express');
+const cors    = require('cors');
+const helmet  = require('helmet');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-// ── Middleware ──────────────────────────────────────────
-app.use(
-  cors({
-    origin: "http://localhost:5173", // Vite dev server
-    credentials: true,
-  }),
-);
+// ── Security & parsing ────────────────────────────────────────
+app.use(helmet());
+app.use(cors({
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ── Health check route ──────────────────────────────────
-app.get("/", (req, res) => {
-  res.json({
-    message: "WasteManagement Platform API is running",
-    status: "OK",
-    environment: process.env.NODE_ENV,
-  });
+// ── Health check ──────────────────────────────────────────────
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'ok', time: new Date() });
 });
 
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV,
-  });
-});
-
-// ── Routes (to be added as modules are built) ──────────
-app.use('/api/auth', require('./routes/auth'));
-// app.use('/api/collectors', require('./routes/collectors'));
-// app.use('/api/buyers', require('./routes/buyers'));
+// ── Routes ────────────────────────────────────────────────────
+app.use('/api/auth',       require('./routes/auth'));
 app.use('/api/waste-logs', require('./routes/wasteLogs'));
-// app.use('/api/transactions', require('./routes/transactions'));
-// app.use('/api/ussd', require('./routes/ussd'));
-// app.use('/api/admin', require('./routes/admin'));
+app.use('/api/buyer',      require('./routes/buyer.routes'));
+app.use('/api/mpesa',      require('./routes/mpesa'));  // public — no auth
 
-// ── 404 handler ─────────────────────────────────────────
-app.use((req, res) => {
-  res.status(404).json({ error: "Route not found" });
-});
+// app.use('/api/buyers',      require('./routes/buyers'));
+// app.use('/api/coordinator', require('./routes/coordinator'));
+// app.use('/api/admin',       require('./routes/admin'));
 
-// ── Global error handler ─────────────────────────────────
-const errorHandler = require('./middleware/errorHandler');
-app.use(errorHandler);
+// ── Global error handler (must be last) ───────────────────────
+app.use(require('./middleware/errorHandler'));
 
-// ── Start server ─────────────────────────────────────────
+// ── Start ─────────────────────────────────────────────────────
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });

@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore, ROLE_DASHBOARDS } from '../store/authStore';
 
 export default function Login() {
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ phone_number: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const { login, loading, error, clearError } = useAuthStore();
   const navigate = useNavigate();
@@ -17,7 +17,7 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const user = await login(form.email, form.password);
+      const user = await login(form.phone_number, form.password);
       navigate(ROLE_DASHBOARDS[user.role], { replace: true });
     } catch {
       return;
@@ -88,16 +88,16 @@ export default function Login() {
           <form onSubmit={handleSubmit}>
             {/* Email */}
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 8 }}>
-              Email or Phone Number
+              Phone Number
             </label>
             <div style={{ position: 'relative', marginBottom: 20 }}>
               <span style={{
                 position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
                 fontSize: 16, color: '#aaa',
-              }}>@</span>
+              }}>📞</span>
               <input
-                name="email" type="email" value={form.email}
-                onChange={handleChange} placeholder="name@example.com" required
+                name="phone_number" type="tel" value={form.phone_number}
+                onChange={handleChange} placeholder="e.g. 0712345678" required
                 style={{
                   width: '100%', padding: '14px 14px 14px 40px',
                   border: '1.5px solid #e8e8e8', borderRadius: 12,
@@ -108,9 +108,8 @@ export default function Login() {
             </div>
 
             {/* Password */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ marginBottom: 8 }}>
               <label style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>Password</label>
-              <span style={{ fontSize: 13, color: '#2d9e6b', fontWeight: 600, cursor: 'pointer' }}>Forgot?</span>
             </div>
             <div style={{ position: 'relative', marginBottom: 24 }}>
               <span style={{
@@ -146,23 +145,6 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '22px 0' }}>
-            <div style={{ flex: 1, height: 1, background: '#eee' }} />
-            <span style={{ fontSize: 13, color: '#aaa', whiteSpace: 'nowrap' }}>Or continue with</span>
-            <div style={{ flex: 1, height: 1, background: '#eee' }} />
-          </div>
-
-          {/* Google only — M-Pesa login skipped per spec */}
-          <button style={{
-            width: '100%', padding: '14px',
-            border: '1.5px solid #e8e8e8', borderRadius: 12,
-            fontSize: 15, fontWeight: 600, cursor: 'pointer',
-            background: '#fff', color: '#333',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-          }}>
-            <span style={{ fontSize: 20 }}>G</span> Google
-          </button>
         </div>
       </div>
 

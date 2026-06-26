@@ -1,39 +1,28 @@
-const jwt = require("jsonwebtoken");
-const pool = require("../config/db");
+const jwt  = require('jsonwebtoken');
+const pool = require('../config/db');
 
-const authenticate = async (req, res, next) => {
+module.exports = async (req, res, next) => {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'No token provided.' });
+  }
+  const token = header.split(' ')[1];
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "No token provided" });
-    }
-
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    const result = await pool.query(
-      "SELECT user_id, email, role, status FROM users WHERE user_id = $1",
-      [decoded.userId],
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const { rows } = await pool.query(
+      `SELECT user_id, name, email, phone_number, role, status
+       FROM users WHERE user_id = $1`,
+      [payload.userId]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: "User not found" });
+    if (!rows.length) {
+      return res.status(401).json({ error: 'User not found.' });
     }
-
-    const user = result.rows[0];
-    if (user.status !== "active") {
-      return res.status(403).json({ error: "Account is not active" });
+    if (rows[0].status !== 'active') {
+      return res.status(401).json({ error: 'Account is not active.' });
     }
-
-    req.user = user;
+    req.user = rows[0];
     next();
   } catch (err) {
-    if (err.name === "TokenExpiredError") {
-      return res.status(401).json({ error: "Token expired" });
-    }
-    return res.status(401).json({ error: "Invalid token" });
+    next(err);
   }
 };
-
-module.exports = authenticate;
-

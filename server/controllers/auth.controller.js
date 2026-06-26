@@ -61,7 +61,7 @@ const register = async (req, res, next) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const status = role === "buyer" ? "pending" : "active";
+    const status = "active";
 
     const result = await pool.query(
       `INSERT INTO users (name, email, password_hash, phone_number, role, status)

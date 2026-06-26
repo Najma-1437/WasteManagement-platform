@@ -4,7 +4,7 @@ import api from '../api/axiosClient';
 
 export const ROLE_DASHBOARDS = {
   collector:   '/collector',
-  buyer:       '/buyer',
+  buyer:       '/buyer/dashboard',
   coordinator: '/coordinator',
   admin:       '/admin',
 };

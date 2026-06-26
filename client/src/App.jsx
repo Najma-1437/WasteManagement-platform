@@ -55,8 +55,8 @@ export default function App() {
         }/>
 
         {/* ── Buyer ── */}
-        <Route path="/buyer/*" element={
-          <ProtectedRoute roles={['buyer']}>
+        <Route path="/buyer/dashboard" element={
+          <ProtectedRoute roles="buyer">
             <BuyerDashboard />
           </ProtectedRoute>
         }/>

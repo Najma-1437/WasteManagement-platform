@@ -1,15 +1,14 @@
 // client/src/pages/Register.jsx
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, ROLE_DASHBOARDS } from '../store/authStore';
 
 export default function Register() {
   const [form, setForm] = useState({
     name: '', email: '', phone_number: '', password: '', role: '',
     residence: '', house_number: '', organisation_name: '', organisation: '',
   });
-  const [success, setSuccess] = useState('');
-  const { register, loading, error, clearError } = useAuthStore();
+  const { register, login, loading, error, clearError } = useAuthStore();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -19,13 +18,12 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSuccess('');
     try {
-      const data = await register(form);
-      setSuccess(data.message);
-      if (form.role === 'collector') setTimeout(() => navigate('/login'), 2000);
-    } catch (err) {
-      console.error('Registration failed:', err);
+      await register(form);
+      const user = await login(form.phone_number, form.password);
+      navigate(ROLE_DASHBOARDS[user.role], { replace: true });
+    } catch {
+      // error already set in store
     }
   };
 
@@ -61,8 +59,7 @@ export default function Register() {
         </div>
 
         <div style={{ padding: '28px 28px 24px' }}>
-          {error   && <div style={{ background: '#fef2f2', color: '#dc2626', borderRadius: 10, padding: '12px 14px', fontSize: 14, marginBottom: 20, border: '1px solid #fecaca' }}>{error}</div>}
-          {success && <div style={{ background: '#f0fdf4', color: '#16a34a', borderRadius: 10, padding: '12px 14px', fontSize: 14, marginBottom: 20, border: '1px solid #bbf7d0' }}>{success}</div>}
+          {error && <div style={{ background: '#fef2f2', color: '#dc2626', borderRadius: 10, padding: '12px 14px', fontSize: 14, marginBottom: 20, border: '1px solid #fecaca' }}>{error}</div>}
 
           <form onSubmit={handleSubmit}>
             {/* Role */}
@@ -133,12 +130,6 @@ export default function Register() {
               {loading ? 'Creating account...' : 'Create Account'}
             </button>
           </form>
-
-          {['buyer','coordinator'].includes(form.role) && (
-            <p style={{ fontSize: 12, color: '#888', marginTop: 12, textAlign: 'center', lineHeight: 1.5 }}>
-              Buyer and Coordinator accounts require administrator approval before login.
-            </p>
-          )}
 
           <p style={{ textAlign: 'center', marginTop: 20, fontSize: 14, color: '#666' }}>
             Already have an account?{' '}
