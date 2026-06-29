@@ -31,6 +31,13 @@ api.interceptors.response.use(
     const original = error.config;
 
     if (error.response?.status === 401 && !original._retry) {
+      // Auth endpoints return intentional 401s — don't intercept them.
+      // Without this guard, a failed login triggers a refresh attempt and
+      // then a hard page reload, causing the "invalid then refreshes" bug.
+      if ((original.url || '').includes('/auth/')) {
+        return Promise.reject(error);
+      }
+
       original._retry = true;
 
       try {
@@ -53,9 +60,9 @@ api.interceptors.response.use(
         original.headers.Authorization = `Bearer ${data.accessToken}`;
         return api(original);
       } catch {
-        // Refresh failed — clear storage and redirect to login
+        // Refresh failed — clear storage and go to landing page
         localStorage.removeItem("auth-storage");
-        window.location.href = "/login";
+        window.location.href = "/";
       }
     }
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   getMyOffers, createOffer, updateOffer, deleteOffer,
   getMatches, getMyTransactions, confirmMatch, initiatePayment,
@@ -67,6 +68,31 @@ const css = `
     justify-content: center;
     font-size: 18px;
   }
+  .bd-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .bd-header-username {
+    color: rgba(255,255,255,0.85);
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .bd-btn-logout {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.35);
+    background: transparent;
+    color: rgba(255,255,255,0.85);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .bd-btn-logout:hover { background: rgba(255,255,255,0.12); }
+
   .bd-header-tabs {
     display: flex;
     gap: 4px;
@@ -405,6 +431,7 @@ const css = `
   @media (max-width: 767px) {
     .bd-header-tabs { display: none; }
     .bd-mobile-tabs { display: flex; }
+    .bd-header-username { display: none; }
     .bd-main { padding: 16px 16px 48px; }
     .bd-stats { grid-template-columns: repeat(3, 1fr); gap: 10px; }
     .bd-stat { padding: 14px 12px; }
@@ -436,6 +463,13 @@ export default function BuyerDashboard() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const user = useAuthStore(s => s.user);
+  const logout = useAuthStore(s => s.logout);
+  const navigate = useNavigate();
+
+  function handleLogout() {
+    navigate('/', { replace: true });
+    logout();
+  }
   const [payState, setPayState] = useState({ txId: null, phone: '', loading: false, sent: false });
 
   useEffect(() => { loadAll(); }, []);
@@ -557,6 +591,11 @@ export default function BuyerDashboard() {
                 </button>
               ))}
             </nav>
+
+            <div className="bd-header-right">
+              <span className="bd-header-username">{user?.name}</span>
+              <button className="bd-btn-logout" onClick={handleLogout}>Logout</button>
+            </div>
           </div>
         </header>
 
