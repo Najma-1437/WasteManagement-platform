@@ -1,8 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const { mpesaCallback } = require('../controllers/buyer.controller');
+const {
+  mpesaCallback,
+  b2cResultCallback,
+  b2cTimeoutCallback,
+} = require('../controllers/buyer.controller');
 
-// Public endpoint — Safaricom calls this after STK Push completes
-router.post('/callback', mpesaCallback);
+// Public endpoints — Safaricom calls these; no auth middleware
+router.post('/callback',    mpesaCallback);
+router.post('/b2c-result',  b2cResultCallback);
+router.post('/b2c-timeout', b2cTimeoutCallback);
 
 module.exports = router;
