@@ -5,7 +5,10 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --forceExit"
+  },
+  "jest": {
+    "testEnvironment": "node"
   },
   "keywords": [],
   "author": "",
@@ -16,10 +19,12 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.21.0"
   },
   "devDependencies": {
+    "jest": "^29.7.0",
     "nodemon": "^3.1.14"
   },
   "description": ""

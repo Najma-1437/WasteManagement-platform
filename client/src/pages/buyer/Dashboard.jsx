@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   getMyOffers, createOffer, updateOffer, deleteOffer,
   getMatches, getMyTransactions, confirmMatch, initiatePayment,
+  confirmReceipt, retryPayout, checkPaymentStatus, checkPayoutStatus,
 } from '../../api/buyer';
 import { useAuthStore } from '../../store/authStore';
 import MapPicker from '../../components/MapPicker';
@@ -358,11 +359,14 @@ const css = `
     text-transform: capitalize;
     white-space: nowrap;
   }
-  .pill-active   { background: #E7F4EC; color: #1F6F4A; }
-  .pill-inactive { background: #F0F0F0; color: #6B7280; }
-  .pill-pending  { background: #FFF4E5; color: #E8A33D; }
-  .pill-completed{ background: #E7F4EC; color: #1F6F4A; }
-  .pill-failed   { background: #FDECEA; color: #B3261E; }
+  .pill-active        { background: #E7F4EC; color: #1F6F4A; }
+  .pill-inactive      { background: #F0F0F0; color: #6B7280; }
+  .pill-pending       { background: #FFF4E5; color: #E8A33D; }
+  .pill-completed     { background: #E7F4EC; color: #1F6F4A; }
+  .pill-failed        { background: #FDECEA; color: #B3261E; }
+  .pill-escrowed      { background: #FFF4E5; color: #E8A33D; }
+  .pill-payout_failed { background: #FDECEA; color: #B3261E; }
+  .pill-released      { background: #E7F4EC; color: #1F6F4A; }
 
   /* ── Distance badge ── */
   .bd-distance {
@@ -435,8 +439,12 @@ export default function BuyerDashboard() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const user = useAuthStore(s => s.user);
+  const { user, logout } = useAuthStore();
   const [payState, setPayState] = useState({ txId: null, phone: '', loading: false, sent: false });
+  // keyed by transaction_id: { loading, message, error }
+  const [escrowState, setEscrowState] = useState({});
+  const [checkState, setCheckState] = useState({});
+  const [payoutCheckState, setPayoutCheckState] = useState({});
 
   useEffect(() => { loadAll(); }, []);
 
@@ -520,6 +528,55 @@ export default function BuyerDashboard() {
     }
   }
 
+  async function handleCheckStatus(transactionId) {
+    setCheckState(s => ({ ...s, [transactionId]: { loading: true, message: '', error: '' } }));
+    try {
+      const res = await checkPaymentStatus(transactionId);
+      const { payment_status, message } = res.data;
+      setCheckState(s => ({ ...s, [transactionId]: { loading: false, message, error: '' } }));
+      if (payment_status === 'escrowed') {
+        const txRes = await getMyTransactions();
+        setTransactions(txRes.data.transactions);
+      }
+    } catch (err) {
+      setCheckState(s => ({ ...s, [transactionId]: { loading: false, message: '', error: err.response?.data?.error || 'Status check failed. Try again.' } }));
+    }
+  }
+
+  async function handleConfirmReceipt(transactionId) {
+    setEscrowState(s => ({ ...s, [transactionId]: { loading: true, message: '', error: '' } }));
+    try {
+      const res = await confirmReceipt(transactionId);
+      setEscrowState(s => ({ ...s, [transactionId]: { loading: false, message: res.data.message, error: '' } }));
+      const txRes = await getMyTransactions();
+      setTransactions(txRes.data.transactions);
+    } catch (err) {
+      setEscrowState(s => ({ ...s, [transactionId]: { loading: false, message: '', error: err.response?.data?.error || 'Failed to confirm receipt. Try again.' } }));
+    }
+  }
+
+  async function handleCheckPayoutStatus(transactionId) {
+    setPayoutCheckState(s => ({ ...s, [transactionId]: { loading: true, message: '', error: '' } }));
+    try {
+      const res = await checkPayoutStatus(transactionId);
+      setPayoutCheckState(s => ({ ...s, [transactionId]: { loading: false, message: res.data.message, error: '' } }));
+    } catch (err) {
+      setPayoutCheckState(s => ({ ...s, [transactionId]: { loading: false, message: '', error: err.response?.data?.error || 'Payout status check failed. Try again.' } }));
+    }
+  }
+
+  async function handleRetryPayout(transactionId) {
+    setEscrowState(s => ({ ...s, [transactionId]: { loading: true, message: '', error: '' } }));
+    try {
+      const res = await retryPayout(transactionId);
+      setEscrowState(s => ({ ...s, [transactionId]: { loading: false, message: res.data.message, error: '' } }));
+      const txRes = await getMyTransactions();
+      setTransactions(txRes.data.transactions);
+    } catch (err) {
+      setEscrowState(s => ({ ...s, [transactionId]: { loading: false, message: '', error: err.response?.data?.error || 'Retry failed. Try again.' } }));
+    }
+  }
+
   const NAV_TABS = [
     { key: 'offers', label: 'My Offers', count: offers.length },
     { key: 'matches', label: 'Matches', count: matches.length },
@@ -557,6 +614,19 @@ export default function BuyerDashboard() {
                 </button>
               ))}
             </nav>
+            <div
+              onClick={logout}
+              title="Log out"
+              style={{
+                width: 36, height: 36, borderRadius: '50%',
+                background: 'rgba(255,255,255,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 700, fontSize: 15, color: '#fff',
+                cursor: 'pointer', flexShrink: 0,
+              }}
+            >
+              {user?.name?.charAt(0).toUpperCase() || 'B'}
+            </div>
           </div>
         </header>
 
@@ -782,12 +852,113 @@ export default function BuyerDashboard() {
                             )}
                           </div>
 
+                          {t.status === 'escrowed' && !t.payout_initiated && (
+                            escrowState[t.transaction_id]?.message ? (
+                              <p style={{ margin: '12px 0 0', fontSize: 13, color: C.primary, fontWeight: 600, textAlign: 'center' }}>
+                                {escrowState[t.transaction_id].message}
+                              </p>
+                            ) : (
+                              <>
+                                {escrowState[t.transaction_id]?.error && (
+                                  <p style={{ margin: '12px 0 4px', fontSize: 12, color: C.danger }}>
+                                    {escrowState[t.transaction_id].error}
+                                  </p>
+                                )}
+                                <button
+                                  className="bd-btn-confirm"
+                                  disabled={escrowState[t.transaction_id]?.loading}
+                                  style={{ opacity: escrowState[t.transaction_id]?.loading ? 0.6 : 1, cursor: escrowState[t.transaction_id]?.loading ? 'not-allowed' : 'pointer' }}
+                                  onClick={() => handleConfirmReceipt(t.transaction_id)}
+                                >
+                                  {escrowState[t.transaction_id]?.loading ? 'Sending payout…' : 'Confirm Receipt'}
+                                </button>
+                              </>
+                            )
+                          )}
+
+                          {t.status === 'escrowed' && t.payout_initiated && (
+                            payoutCheckState[t.transaction_id]?.message ? (
+                              <p style={{ margin: '12px 0 0', fontSize: 13, color: C.primary, fontWeight: 600, textAlign: 'center' }}>
+                                {payoutCheckState[t.transaction_id].message}
+                              </p>
+                            ) : (
+                              <>
+                                {payoutCheckState[t.transaction_id]?.error && (
+                                  <p style={{ margin: '12px 0 4px', fontSize: 12, color: C.danger }}>
+                                    {payoutCheckState[t.transaction_id].error}
+                                  </p>
+                                )}
+                                <button
+                                  className="bd-btn-confirm"
+                                  disabled={payoutCheckState[t.transaction_id]?.loading}
+                                  style={{ opacity: payoutCheckState[t.transaction_id]?.loading ? 0.6 : 1, cursor: payoutCheckState[t.transaction_id]?.loading ? 'not-allowed' : 'pointer' }}
+                                  onClick={() => handleCheckPayoutStatus(t.transaction_id)}
+                                >
+                                  {payoutCheckState[t.transaction_id]?.loading ? 'Querying…' : 'Check Payout Status'}
+                                </button>
+                              </>
+                            )
+                          )}
+
+                          {t.status === 'payout_failed' && (
+                            <>
+                              {t.payout_error && (
+                                <p style={{ margin: '12px 0 6px', fontSize: 12, color: C.danger, background: '#FDECEA', borderRadius: 8, padding: '8px 12px' }}>
+                                  {t.payout_error}
+                                </p>
+                              )}
+                              {escrowState[t.transaction_id]?.error && (
+                                <p style={{ margin: '4px 0 6px', fontSize: 12, color: C.danger }}>
+                                  {escrowState[t.transaction_id].error}
+                                </p>
+                              )}
+                              <button
+                                className="bd-btn-confirm"
+                                disabled={escrowState[t.transaction_id]?.loading}
+                                style={{ background: C.accent, opacity: escrowState[t.transaction_id]?.loading ? 0.6 : 1, cursor: escrowState[t.transaction_id]?.loading ? 'not-allowed' : 'pointer' }}
+                                onClick={() => handleRetryPayout(t.transaction_id)}
+                              >
+                                {escrowState[t.transaction_id]?.loading ? 'Retrying…' : 'Retry Payout'}
+                              </button>
+                            </>
+                          )}
+
+                          {t.status === 'released' && t.released_at && (
+                            <p style={{ margin: '12px 0 0', fontSize: 12, color: C.muted }}>
+                              Released {new Date(t.released_at).toLocaleDateString('en-KE', { dateStyle: 'medium' })}
+                            </p>
+                          )}
+
                           {t.status === 'pending' && (
                             payState.txId === t.transaction_id ? (
                               payState.sent ? (
-                                <p style={{ margin: '12px 0 0', fontSize: 13, color: C.primary, fontWeight: 600, textAlign: 'center' }}>
-                                  M-Pesa prompt sent! Check your phone and enter your PIN.
-                                </p>
+                                <div style={{ marginTop: 12 }}>
+                                  <p style={{ margin: '0 0 10px', fontSize: 13, color: C.primary, fontWeight: 600, textAlign: 'center' }}>
+                                    M-Pesa prompt sent! Check your phone and enter your PIN.
+                                  </p>
+                                  <button
+                                    style={{
+                                      width: '100%', padding: '9px 0', borderRadius: 8, border: 'none',
+                                      background: C.primary, color: '#fff', fontWeight: 700, fontSize: 13,
+                                      cursor: checkState[t.transaction_id]?.loading ? 'not-allowed' : 'pointer',
+                                      opacity: checkState[t.transaction_id]?.loading ? 0.6 : 1,
+                                    }}
+                                    disabled={checkState[t.transaction_id]?.loading}
+                                    onClick={() => handleCheckStatus(t.transaction_id)}
+                                  >
+                                    {checkState[t.transaction_id]?.loading ? 'Checking…' : 'Check Payment Status'}
+                                  </button>
+                                  {checkState[t.transaction_id]?.message && (
+                                    <p style={{ margin: '8px 0 0', fontSize: 12, color: C.muted, textAlign: 'center' }}>
+                                      {checkState[t.transaction_id].message}
+                                    </p>
+                                  )}
+                                  {checkState[t.transaction_id]?.error && (
+                                    <p style={{ margin: '8px 0 0', fontSize: 12, color: C.danger }}>
+                                      {checkState[t.transaction_id].error}
+                                    </p>
+                                  )}
+                                </div>
                               ) : (
                                 <div style={{ marginTop: 12 }}>
                                   <input
@@ -825,17 +996,43 @@ export default function BuyerDashboard() {
                                 </div>
                               )
                             ) : (
-                              <button
-                                className="bd-btn-confirm"
-                                onClick={() => setPayState({
-                                  txId: t.transaction_id,
-                                  phone: user?.phone_number || '',
-                                  loading: false,
-                                  sent: false,
-                                })}
-                              >
-                                Pay via M-Pesa
-                              </button>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
+                                <button
+                                  className="bd-btn-confirm"
+                                  style={{ marginTop: 0 }}
+                                  onClick={() => setPayState({
+                                    txId: t.transaction_id,
+                                    phone: user?.phone_number || '',
+                                    loading: false,
+                                    sent: false,
+                                  })}
+                                >
+                                  Pay via M-Pesa
+                                </button>
+                                <button
+                                  style={{
+                                    width: '100%', padding: '8px 0', borderRadius: 8,
+                                    border: `1px solid ${C.border}`, background: 'transparent',
+                                    color: C.muted, fontWeight: 600, fontSize: 13,
+                                    cursor: checkState[t.transaction_id]?.loading ? 'not-allowed' : 'pointer',
+                                    opacity: checkState[t.transaction_id]?.loading ? 0.6 : 1,
+                                  }}
+                                  disabled={checkState[t.transaction_id]?.loading}
+                                  onClick={() => handleCheckStatus(t.transaction_id)}
+                                >
+                                  {checkState[t.transaction_id]?.loading ? 'Checking…' : 'Already paid? Check Status'}
+                                </button>
+                                {checkState[t.transaction_id]?.message && (
+                                  <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted, textAlign: 'center' }}>
+                                    {checkState[t.transaction_id].message}
+                                  </p>
+                                )}
+                                {checkState[t.transaction_id]?.error && (
+                                  <p style={{ margin: '2px 0 0', fontSize: 12, color: C.danger }}>
+                                    {checkState[t.transaction_id].error}
+                                  </p>
+                                )}
+                              </div>
                             )
                           )}
                         </div>
@@ -866,8 +1063,10 @@ function StatusPill({ status }) {
   const cls = {
     active: 'pill-active', inactive: 'pill-inactive',
     pending: 'pill-pending', completed: 'pill-completed', failed: 'pill-failed',
+    escrowed: 'pill-escrowed', payout_failed: 'pill-payout_failed', released: 'pill-released',
   };
+  const label = status === 'payout_failed' ? 'payout failed' : status;
   return (
-    <span className={`pill ${cls[status] || 'pill-inactive'}`}>{status}</span>
+    <span className={`pill ${cls[status] || 'pill-inactive'}`}>{label}</span>
   );
 }

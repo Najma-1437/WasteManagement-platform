@@ -102,18 +102,31 @@ const register = async (req, res, next) => {
   }
 };
 
+const normalizePhone = (phone) => {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('254')) return `+${digits}`;
+  if (digits.startsWith('0')) return `+254${digits.slice(1)}`;
+  return `+254${digits}`;
+};
+
 // POST /api/auth/login
 const login = async (req, res, next) => {
   try {
     const { phone_number, password } = req.body;
 
     if (!phone_number || !password) {
-      return res.status(400).json({ error: "Phone number and password are required" });
+      return res.status(400).json({ error: "Phone number or email and password are required" });
     }
 
-    const result = await pool.query("SELECT * FROM users WHERE phone_number = $1", [
-      phone_number,
-    ]);
+    const isEmail = phone_number.includes('@');
+    const normalized = isEmail ? phone_number.toLowerCase().trim() : normalizePhone(phone_number);
+
+    const result = await pool.query(
+      isEmail
+        ? "SELECT * FROM users WHERE email = $1"
+        : "SELECT * FROM users WHERE phone_number = $1",
+      [normalized]
+    );
 
     if (result.rows.length === 0) {
       return res.status(401).json({ error: "Invalid credentials" });

@@ -86,9 +86,8 @@ export default function Login() {
           )}
 
           <form onSubmit={handleSubmit}>
-            {/* Email */}
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 8 }}>
-              Phone Number
+              Phone Number or Email
             </label>
             <div style={{ position: 'relative', marginBottom: 20 }}>
               <span style={{
@@ -96,8 +95,8 @@ export default function Login() {
                 fontSize: 16, color: '#aaa',
               }}>📞</span>
               <input
-                name="phone_number" type="tel" value={form.phone_number}
-                onChange={handleChange} placeholder="e.g. 0712345678" required
+                name="phone_number" type="text" value={form.phone_number}
+                onChange={handleChange} placeholder="0712345678 or email@example.com" required
                 style={{
                   width: '100%', padding: '14px 14px 14px 40px',
                   border: '1.5px solid #e8e8e8', borderRadius: 12,

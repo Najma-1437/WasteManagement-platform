@@ -8,8 +8,18 @@ const app = express();
 // ── Security & parsing ────────────────────────────────────────
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true
+  origin: (origin, callback) => {
+    const allowed = (process.env.CLIENT_URL || 'http://localhost:5173')
+      .split(',').map(s => s.trim());
+    const devLocalhost = process.env.NODE_ENV !== 'production'
+      && (!origin || /^http:\/\/localhost:\d+$/.test(origin));
+    if (devLocalhost || allowed.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
