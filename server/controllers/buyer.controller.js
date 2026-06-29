@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const smsService = require('../services/sms.service');
 
 // Helper: resolve buyer_id from the authenticated user_id
 async function getBuyerId(userId) {
@@ -183,6 +184,7 @@ exports.getMyTransactions = async (req, res, next) => {
               t.amount_kes       AS amount,
               t.payment_status   AS status,
               t.mpesa_code       AS mpesa_receipt,
+              t.payout_error,
               t.transaction_date AS created_at,
               wl.category, wl.weight_kg,
               u.name AS collector_name
@@ -236,6 +238,27 @@ exports.confirmMatch = async (req, res, next) => {
 
     const weightKg = parseFloat(logResult.rows[0].weight_kg);
     const amountKes = (weightKg * pricePerKg).toFixed(2);
+
+    // Notify collector via SMS (fire-and-forget; never blocks or throws)
+    try {
+      const collectorInfo = await pool.query(
+        `SELECT u.phone_number, wl.category
+         FROM waste_logs wl
+         JOIN collectors c ON c.collector_id = wl.collector_id
+         JOIN users u ON u.user_id = c.user_id
+         WHERE wl.log_id = $1`,
+        [logId]
+      );
+      if (collectorInfo.rows.length > 0) {
+        const { phone_number, category } = collectorInfo.rows[0];
+        smsService.sendSms(
+          phone_number,
+          `WasteManagement: Your ${weightKg}kg ${category} log has been matched with a buyer. Check the app for details.`
+        );
+      }
+    } catch (smsErr) {
+      console.error('[confirmMatch] SMS notification error:', smsErr);
+    }
 
     // Create a pending transaction
     const txResult = await pool.query(
@@ -375,7 +398,7 @@ exports.mpesaCallback = async (req, res) => {
 
     const txUpdate = await pool.query(
       `UPDATE transactions
-       SET payment_status = 'completed', mpesa_code = $1
+       SET payment_status = 'escrowed', mpesa_code = $1
        WHERE checkout_request_id = $2
        RETURNING log_id`,
       [mpesaCode, CheckoutRequestID]
@@ -383,7 +406,7 @@ exports.mpesaCallback = async (req, res) => {
 
     if (txUpdate.rows.length > 0) {
       await pool.query(
-        `UPDATE waste_logs SET status = 'paid' WHERE log_id = $1`,
+        `UPDATE waste_logs SET status = 'confirmed' WHERE log_id = $1`,
         [txUpdate.rows[0].log_id]
       );
     }
@@ -393,4 +416,169 @@ exports.mpesaCallback = async (req, res) => {
     console.error('M-Pesa callback error:', err);
     res.json({ ResultCode: 0, ResultDesc: 'OK' }); // always 200 to Safaricom
   }
+};
+
+// PATCH /api/buyer/transactions/:transactionId/confirm-receipt
+// Buyer confirms they received the waste; triggers B2C payout to collector.
+// NOTE: Daraja sandbox B2C typically returns "Insufficient balance" — this is a
+// sandbox platform limitation, not a code bug. The request is correctly formed.
+exports.confirmReceipt = async (req, res, next) => {
+  try {
+    const buyerId = await getBuyerId(req.user.user_id);
+    const { transactionId } = req.params;
+
+    const txResult = await pool.query(
+      `SELECT t.*, wl.weight_kg, wl.category, wl.collector_id
+       FROM transactions t
+       JOIN waste_logs wl ON wl.log_id = t.log_id
+       WHERE t.transaction_id = $1 AND t.buyer_id = $2`,
+      [transactionId, buyerId]
+    );
+
+    if (txResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    const tx = txResult.rows[0];
+
+    if (tx.payment_status !== 'escrowed') {
+      return res.status(400).json({ error: 'Transaction must be escrowed before confirming receipt' });
+    }
+
+    const claimResult = await pool.query(
+      `UPDATE transactions SET payment_status = 'payout_initiated'
+       WHERE transaction_id = $1 AND payment_status = 'escrowed'
+       RETURNING transaction_id`,
+      [transactionId]
+    );
+    if (claimResult.rows.length === 0) {
+      return res.status(409).json({ error: 'Payout already in progress or completed for this transaction' });
+    }
+
+    const collectorResult = await pool.query(
+      `SELECT u.phone_number FROM collectors c
+       JOIN users u ON u.user_id = c.user_id
+       WHERE c.collector_id = $1`,
+      [tx.collector_id]
+    );
+
+    if (collectorResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Collector not found' });
+    }
+
+    let phone = String(collectorResult.rows[0].phone_number || '').replace(/\s+/g, '');
+    if (phone.startsWith('0'))  phone = '254' + phone.slice(1);
+    if (phone.startsWith('+'))  phone = phone.slice(1);
+
+    const token = await getMpesaToken();
+    const host = process.env.MPESA_ENVIRONMENT === 'production'
+      ? 'api.safaricom.co.ke'
+      : 'sandbox.safaricom.co.ke';
+
+    console.log('[B2C confirmReceipt] Initiating payout to', phone, 'amount', Math.ceil(parseFloat(tx.amount_kes)));
+
+    const b2cRes = await fetch(`https://${host}/mpesa/b2c/v1/paymentrequest`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        InitiatorName:      process.env.MPESA_B2C_INITIATOR_NAME,
+        SecurityCredential: process.env.MPESA_B2C_SECURITY_CREDENTIAL,
+        CommandID:          'SalaryPayment',
+        Amount:             Math.ceil(parseFloat(tx.amount_kes)),
+        PartyA:             process.env.MPESA_B2C_SHORTCODE,
+        PartyB:             phone,
+        Remarks:            `Payout for ${tx.weight_kg}kg ${tx.category}`,
+        QueueTimeOutURL:    process.env.MPESA_B2C_TIMEOUT_URL,
+        ResultURL:          process.env.MPESA_B2C_RESULT_URL,
+        Occasion:           `WM-TX-${transactionId}`,
+      }),
+    });
+
+    if (!b2cRes.ok) {
+      const errorText = await b2cRes.text();
+      console.error('[B2C confirmReceipt] Non-OK response:', b2cRes.status, errorText.slice(0, 300));
+      await pool.query(
+        `UPDATE transactions SET payment_status = 'payout_failed', payout_error = $1 WHERE transaction_id = $2`,
+        [`Daraja returned ${b2cRes.status}: request may have been rate-limited or rejected by gateway`, transactionId]
+      );
+      return res.status(502).json({ error: 'M-Pesa service returned an unexpected response. Please wait a moment and try again.' });
+    }
+
+    const b2cData = await b2cRes.json();
+    console.log('[B2C confirmReceipt] Daraja response:', JSON.stringify(b2cData));
+
+    if (b2cData.ResponseCode !== '0') {
+      await pool.query(
+        `UPDATE transactions SET payment_status = 'payout_failed', payout_error = $1
+         WHERE transaction_id = $2`,
+        [b2cData.errorMessage || b2cData.ResponseDescription || JSON.stringify(b2cData), transactionId]
+      );
+      return res.status(502).json({
+        error: b2cData.errorMessage || b2cData.ResponseDescription || 'B2C payout request failed',
+      });
+    }
+
+    await pool.query(
+      `UPDATE transactions SET b2c_conversation_id = $1 WHERE transaction_id = $2`,
+      [b2cData.ConversationID, transactionId]
+    );
+
+    res.json({ message: 'Payout initiated. Awaiting confirmation.' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/mpesa/b2c-result — Safaricom calls this when B2C payout completes/fails
+exports.b2cResultCallback = async (req, res) => {
+  try {
+    const result = req.body?.Result;
+    if (!result) return res.json({ ResultCode: 0, ResultDesc: 'OK' });
+
+    const { ResultCode, ConversationID, ResultDesc } = result;
+    console.log('[B2C result] ConversationID:', ConversationID, '| ResultCode:', ResultCode);
+
+    const txResult = await pool.query(
+      `SELECT transaction_id, log_id FROM transactions WHERE b2c_conversation_id = $1`,
+      [ConversationID]
+    );
+
+    if (txResult.rows.length === 0) {
+      console.error('[B2C result] No transaction found for ConversationID:', ConversationID);
+      return res.json({ ResultCode: 0, ResultDesc: 'OK' });
+    }
+
+    const { transaction_id, log_id } = txResult.rows[0];
+
+    if (ResultCode === 0) {
+      await pool.query(
+        `UPDATE transactions SET payment_status = 'released', released_at = NOW()
+         WHERE transaction_id = $1`,
+        [transaction_id]
+      );
+      await pool.query(
+        `UPDATE waste_logs SET status = 'paid' WHERE log_id = $1`,
+        [log_id]
+      );
+      console.log('[B2C result] Payout released for transaction', transaction_id);
+    } else {
+      await pool.query(
+        `UPDATE transactions SET payment_status = 'payout_failed', payout_error = $1
+         WHERE transaction_id = $2`,
+        [ResultDesc || `B2C failed with code ${ResultCode}`, transaction_id]
+      );
+      console.error('[B2C result] Payout failed for transaction', transaction_id, ':', ResultDesc);
+    }
+
+    res.json({ ResultCode: 0, ResultDesc: 'OK' });
+  } catch (err) {
+    console.error('[B2C result callback] Error:', err);
+    res.json({ ResultCode: 0, ResultDesc: 'OK' });
+  }
+};
+
+// POST /api/mpesa/b2c-timeout — Safaricom calls this if B2C request times out in the queue
+exports.b2cTimeoutCallback = (req, res) => {
+  console.log('[B2C timeout] Received:', JSON.stringify(req.body));
+  res.json({ ResultCode: 0, ResultDesc: 'OK' });
 };

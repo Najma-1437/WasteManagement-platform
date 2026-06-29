@@ -16,5 +16,6 @@ router.delete('/offers/:offerId', buyerController.deleteOffer);
 router.get('/matches', buyerController.getMatches);
 router.get('/transactions', buyerController.getMyTransactions);
 router.post('/transactions/:transactionId/pay', buyerController.initiatePayment);
+router.patch('/transactions/:transactionId/confirm-receipt', buyerController.confirmReceipt);
 
 module.exports = router;

@@ -24,6 +24,7 @@ app.use('/api/auth',       require('./routes/auth'));
 app.use('/api/waste-logs', require('./routes/wasteLogs'));
 app.use('/api/buyer',      require('./routes/buyer.routes'));
 app.use('/api/mpesa',       require('./routes/mpesa'));       // public — no auth
+app.use('/api/ussd',        require('./routes/ussd'));        // public — no auth
 app.use('/api/coordinator', require('./routes/coordinator'));
 
 // ── Global error handler (must be last) ───────────────────────

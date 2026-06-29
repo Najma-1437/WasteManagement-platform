@@ -11,3 +11,6 @@ export const confirmMatch = (logId, offerId) =>
 
 export const initiatePayment = (transactionId, phoneNumber) =>
   axios.post(`/buyer/transactions/${transactionId}/pay`, { phone_number: phoneNumber });
+
+export const confirmReceipt = (transactionId) =>
+  axios.patch(`/buyer/transactions/${transactionId}/confirm-receipt`);
