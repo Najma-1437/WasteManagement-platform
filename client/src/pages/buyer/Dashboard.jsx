@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   getMyOffers, createOffer, updateOffer, deleteOffer,
-  getMatches, getMyTransactions, confirmMatch, initiatePayment,
+  getMatches, getMyTransactions, confirmMatch, initiatePayment, confirmReceipt,
 } from '../../api/buyer';
 import { useAuthStore } from '../../store/authStore';
 import MapPicker from '../../components/MapPicker';
@@ -471,6 +471,7 @@ export default function BuyerDashboard() {
     logout();
   }
   const [payState, setPayState] = useState({ txId: null, phone: '', loading: false, sent: false });
+  const [receiptState, setReceiptState] = useState({ txId: null, loading: false, error: '' });
 
   useEffect(() => { loadAll(); }, []);
 
@@ -551,6 +552,22 @@ export default function BuyerDashboard() {
     } catch (err) {
       setError(err.response?.data?.error || 'M-Pesa payment failed. Check your number and try again.');
       setPayState(s => ({ ...s, loading: false }));
+    }
+  }
+
+  async function handleConfirmReceipt(transactionId) {
+    setReceiptState({ txId: transactionId, loading: true, error: '' });
+    try {
+      await confirmReceipt(transactionId);
+      const txRes = await getMyTransactions();
+      setTransactions(txRes.data.transactions);
+      setReceiptState({ txId: null, loading: false, error: '' });
+    } catch (err) {
+      setReceiptState({
+        txId: transactionId,
+        loading: false,
+        error: err.response?.data?.error || 'Could not confirm receipt. The payout request may need to be retried.',
+      });
     }
   }
 
@@ -877,6 +894,43 @@ export default function BuyerDashboard() {
                               </button>
                             )
                           )}
+
+                          {t.status === 'escrowed' && (
+                            <>
+                              <button
+                                className="bd-btn-confirm"
+                                onClick={() => handleConfirmReceipt(t.transaction_id)}
+                                disabled={receiptState.loading && receiptState.txId === t.transaction_id}
+                              >
+                                {receiptState.loading && receiptState.txId === t.transaction_id
+                                  ? 'Confirming…'
+                                  : 'Confirm Receipt & Pay Collector'}
+                              </button>
+                              {receiptState.txId === t.transaction_id && receiptState.error && (
+                                <p style={{ margin: '8px 0 0', fontSize: 12, color: C.danger, textAlign: 'center' }}>
+                                  {receiptState.error}
+                                </p>
+                              )}
+                            </>
+                          )}
+
+                          {t.status === 'payout_initiated' && (
+                            <p style={{ margin: '12px 0 0', fontSize: 13, color: C.muted, fontWeight: 600, textAlign: 'center' }}>
+                              Payout in progress…
+                            </p>
+                          )}
+
+                          {t.status === 'payout_failed' && (
+                            <p style={{ margin: '12px 0 0', fontSize: 13, color: C.danger, fontWeight: 600, textAlign: 'center' }}>
+                              Payout failed{t.payout_error ? `: ${t.payout_error}` : '. Contact support.'}
+                            </p>
+                          )}
+
+                          {t.status === 'released' && (
+                            <p style={{ margin: '12px 0 0', fontSize: 13, color: C.primary, fontWeight: 600, textAlign: 'center' }}>
+                              ✓ Collector paid out successfully.
+                            </p>
+                          )}
                         </div>
                       ))
                     )}
@@ -905,6 +959,7 @@ function StatusPill({ status }) {
   const cls = {
     active: 'pill-active', inactive: 'pill-inactive',
     pending: 'pill-pending', completed: 'pill-completed', failed: 'pill-failed',
+    escrowed: 'pill-pending', payout_initiated: 'pill-pending', payout_failed: 'pill-failed', released: 'pill-completed',
   };
   return (
     <span className={`pill ${cls[status] || 'pill-inactive'}`}>{status}</span>
