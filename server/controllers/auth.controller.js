@@ -2,6 +2,20 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const pool = require("../config/db");
 
+// Converts any Kenyan phone format to +254XXXXXXXXX.
+// Passes through anything that doesn't look like a local number.
+function normalizePhone(raw) {
+  const p = raw.trim().replace(/\s+/g, '');
+  if (/^07\d{8}$/.test(p))  return '+254' + p.slice(1); // 07XX → +2547XX
+  if (/^2547?\d{8}$/.test(p) && !p.startsWith('+')) return '+' + p; // 254… → +254…
+  return p;
+}
+
+// Returns the local (07…) counterpart of a +254 number, or the number unchanged.
+function localPhone(canonical) {
+  return canonical.startsWith('+254') ? '0' + canonical.slice(4) : canonical;
+}
+
 const generateTokens = (userId, role) => {
   const accessToken = jwt.sign({ userId, role }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "15m",
@@ -48,9 +62,12 @@ const register = async (req, res, next) => {
       return res.status(400).json({ error: "Organisation is required for coordinators" });
     }
 
+    const normalizedPhone = normalizePhone(phone_number);
+    const localFmt        = localPhone(normalizedPhone);
+
     const existing = await pool.query(
-      "SELECT user_id, email, phone_number FROM users WHERE email = $1 OR phone_number = $2",
-      [email, phone_number],
+      "SELECT user_id, email, phone_number FROM users WHERE email = $1 OR phone_number = $2 OR phone_number = $3",
+      [email, normalizedPhone, localFmt],
     );
     if (existing.rows.length > 0) {
       const taken = existing.rows[0];
@@ -67,7 +84,7 @@ const register = async (req, res, next) => {
       `INSERT INTO users (name, email, password_hash, phone_number, role, status)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING user_id, name, email, role, status`,
-      [name, email, passwordHash, phone_number, role, status],
+      [name, email, passwordHash, normalizedPhone, role, status],
     );
 
     const user = result.rows[0];
@@ -111,9 +128,13 @@ const login = async (req, res, next) => {
       return res.status(400).json({ error: "Phone number and password are required" });
     }
 
-    const result = await pool.query("SELECT * FROM users WHERE phone_number = $1", [
-      phone_number,
-    ]);
+    const canonical = normalizePhone(phone_number);
+    const local     = localPhone(canonical);
+
+    const result = await pool.query(
+      "SELECT * FROM users WHERE phone_number = $1 OR phone_number = $2",
+      [canonical, local],
+    );
 
     if (result.rows.length === 0) {
       return res.status(401).json({ error: "Invalid credentials" });

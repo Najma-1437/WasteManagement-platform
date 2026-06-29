@@ -23,11 +23,8 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth',       require('./routes/auth'));
 app.use('/api/waste-logs', require('./routes/wasteLogs'));
 app.use('/api/buyer',      require('./routes/buyer.routes'));
-app.use('/api/mpesa',      require('./routes/mpesa'));  // public — no auth
-
-// app.use('/api/buyers',      require('./routes/buyers'));
-// app.use('/api/coordinator', require('./routes/coordinator'));
-// app.use('/api/admin',       require('./routes/admin'));
+app.use('/api/mpesa',       require('./routes/mpesa'));       // public — no auth
+app.use('/api/coordinator', require('./routes/coordinator'));
 
 // ── Global error handler (must be last) ───────────────────────
 app.use(require('./middleware/errorHandler'));

@@ -25,6 +25,11 @@ function timeAgo(dateStr) {
 export default function CollectorDashboard() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+
+  function handleLogout() {
+    navigate('/', { replace: true });
+    logout();
+  }
   const [logs, setLogs]       = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -62,7 +67,7 @@ export default function CollectorDashboard() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <span style={{ fontSize: 20, cursor: 'pointer' }}>🔍</span>
           <span style={{ fontSize: 20, cursor: 'pointer' }}>🔔</span>
-          <div onClick={logout} style={{
+          <div onClick={handleLogout} style={{
             width: 36, height: 36, borderRadius: '50%',
             background: '#ccc', overflow: 'hidden',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
