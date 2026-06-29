@@ -15,10 +15,10 @@ export const useAuthStore = create(
       user: null, accessToken: null, refreshToken: null,
       isAuthenticated: false, loading: false, error: null,
 
-      login: async (phone_number, password) => {
+      login: async (identifier, password) => {
         set({ loading: true, error: null });
         try {
-          const { data } = await api.post('/auth/login', { phone_number, password });
+          const { data } = await api.post('/auth/login', { identifier, password });
           set({
             user: data.user, accessToken: data.accessToken,
             refreshToken: data.refreshToken,

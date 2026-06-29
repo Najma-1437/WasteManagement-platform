@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore, ROLE_DASHBOARDS } from '../store/authStore';
 
 export default function Login() {
-  const [form, setForm] = useState({ phone_number: '', password: '' });
+  const [form, setForm] = useState({ identifier: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const { login, loading, error, clearError } = useAuthStore();
   const navigate = useNavigate();
@@ -17,7 +17,7 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const user = await login(form.phone_number, form.password);
+      const user = await login(form.identifier, form.password);
       navigate(ROLE_DASHBOARDS[user.role], { replace: true });
     } catch {
       return;
@@ -86,18 +86,17 @@ export default function Login() {
           )}
 
           <form onSubmit={handleSubmit}>
-            {/* Email */}
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 8 }}>
-              Phone Number
+              Email or Phone Number
             </label>
             <div style={{ position: 'relative', marginBottom: 20 }}>
               <span style={{
                 position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
                 fontSize: 16, color: '#aaa',
-              }}>📞</span>
+              }}>👤</span>
               <input
-                name="phone_number" type="tel" value={form.phone_number}
-                onChange={handleChange} placeholder="e.g. 0712345678" required
+                name="identifier" type="text" value={form.identifier}
+                onChange={handleChange} placeholder="email@example.com or 0712345678" required
                 style={{
                   width: '100%', padding: '14px 14px 14px 40px',
                   border: '1.5px solid #e8e8e8', borderRadius: 12,

@@ -122,18 +122,17 @@ const register = async (req, res, next) => {
 // POST /api/auth/login
 const login = async (req, res, next) => {
   try {
-    const { phone_number, password } = req.body;
+    const { identifier, password } = req.body;
 
-    if (!phone_number || !password) {
-      return res.status(400).json({ error: "Phone number and password are required" });
+    if (!identifier || !password) {
+      return res.status(400).json({ error: "Identifier and password are required" });
     }
 
-    const canonical = normalizePhone(phone_number);
+    const canonical = normalizePhone(identifier);
     const local     = localPhone(canonical);
-
     const result = await pool.query(
-      "SELECT * FROM users WHERE phone_number = $1 OR phone_number = $2",
-      [canonical, local],
+      "SELECT * FROM users WHERE phone_number = $1 OR phone_number = $2 OR LOWER(email) = LOWER($3)",
+      [canonical, local, identifier],
     );
 
     if (result.rows.length === 0) {
@@ -261,4 +260,4 @@ const me = async (req, res, next) => {
   }
 };
 
-module.exports = { register, login, refreshToken, logout, me };
+module.exports = { register, login, refreshToken, logout, me, normalizePhone };
