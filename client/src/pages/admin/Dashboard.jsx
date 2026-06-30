@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import {
-  getStats, getPending, approveUser, rejectUser,
-  getUsers, updateUserStatus, getDisputes, resolveDispute,
+  getStats, getUsers, updateUserStatus, getDisputes, resolveDispute,
 } from '../../api/admin';
 
 const css = `
@@ -116,7 +115,7 @@ const css = `
   /* ── Stat cards ─────────────────────────────────────────────── */
   .ad-stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 14px;
     margin-bottom: 32px;
   }
@@ -277,10 +276,9 @@ const css = `
 `;
 
 const NAV = [
-  { key: 'dashboard', label: 'Dashboard',         icon: '▦' },
-  { key: 'approvals', label: 'Pending Approvals',  icon: '✓' },
-  { key: 'users',     label: 'Manage Users',        icon: '⊞' },
-  { key: 'disputes',  label: 'Disputes',            icon: '⚠' },
+  { key: 'dashboard', label: 'Dashboard',   icon: '▦' },
+  { key: 'users',     label: 'Manage Users', icon: '⊞' },
+  { key: 'disputes',  label: 'Disputes',     icon: '⚠' },
 ];
 
 function rolePill(role) {
@@ -299,12 +297,11 @@ export default function AdminDashboard() {
 
   const [section,  setSection]  = useState('dashboard');
   const [stats,    setStats]    = useState(null);
-  const [pending,  setPending]  = useState([]);
   const [users,    setUsers]    = useState([]);
   const [disputes, setDisputes] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
-  const [busy,     setBusy]     = useState({});  // tracks per-row loading state
+  const [busy,     setBusy]     = useState({});
 
   function handleLogout() {
     navigate('/', { replace: true });
@@ -312,20 +309,16 @@ export default function AdminDashboard() {
   }
 
   const refreshStats = useCallback(async () => {
-    try {
-      const res = await getStats();
-      setStats(res.data);
-    } catch {}
+    try { setStats((await getStats()).data); } catch {}
   }, []);
 
   const loadSection = useCallback(async (sec) => {
     setLoading(true);
     setError('');
     try {
-      if (sec === 'dashboard' || sec === 'approvals') {
-        const [sRes, pRes] = await Promise.all([getStats(), getPending()]);
+      if (sec === 'dashboard') {
+        const sRes = await getStats();
         setStats(sRes.data);
-        setPending(pRes.data.pending);
       } else if (sec === 'users') {
         const [sRes, uRes] = await Promise.all([getStats(), getUsers()]);
         setStats(sRes.data);
@@ -352,22 +345,6 @@ export default function AdminDashboard() {
     finally { setBusy(b => ({ ...b, [key]: false })); }
   }
 
-  async function handleApprove(userId) {
-    await withBusy(`approve-${userId}`, async () => {
-      await approveUser(userId);
-      setPending(p => p.filter(u => u.user_id !== userId));
-      refreshStats();
-    });
-  }
-
-  async function handleReject(userId) {
-    await withBusy(`reject-${userId}`, async () => {
-      await rejectUser(userId);
-      setPending(p => p.filter(u => u.user_id !== userId));
-      refreshStats();
-    });
-  }
-
   async function handleToggleStatus(u) {
     const next = u.status === 'suspended' ? 'active' : 'suspended';
     await withBusy(`status-${u.user_id}`, async () => {
@@ -384,12 +361,10 @@ export default function AdminDashboard() {
     });
   }
 
-  const pendingCount  = stats?.pendingApprovals ?? 0;
-  const disputeCount  = stats?.openDisputes     ?? 0;
+  const disputeCount = stats?.openDisputes ?? 0;
 
   const sectionTitle = {
     dashboard: 'Admin overview',
-    approvals: 'Pending Approvals',
     users:     'Manage Users',
     disputes:  'Disputes',
   }[section];
@@ -417,9 +392,6 @@ export default function AdminDashboard() {
               >
                 <span className="ad-nav-icon">{n.icon}</span>
                 {n.label}
-                {n.key === 'approvals' && pendingCount > 0 && (
-                  <span className="ad-nav-badge">{pendingCount}</span>
-                )}
                 {n.key === 'disputes' && disputeCount > 0 && (
                   <span className="ad-nav-badge">{disputeCount}</span>
                 )}
@@ -453,8 +425,7 @@ export default function AdminDashboard() {
                 onClick={() => setSection(n.key)}
               >
                 {n.label}
-                {n.key === 'approvals' && pendingCount > 0 ? ` (${pendingCount})` : ''}
-                {n.key === 'disputes'  && disputeCount  > 0 ? ` (${disputeCount})`  : ''}
+                {n.key === 'disputes' && disputeCount > 0 ? ` (${disputeCount})` : ''}
               </button>
             ))}
           </div>
@@ -467,16 +438,11 @@ export default function AdminDashboard() {
 
             {error && <div className="ad-error">{error}</div>}
 
-            {/* Stat cards — shown on dashboard, approvals, and disputes */}
             {stats && section !== 'users' && (
               <div className="ad-stats">
                 <div className="ad-stat">
                   <div className="ad-stat-label">Total Users</div>
                   <div className="ad-stat-value">{stats.totalUsers.toLocaleString()}</div>
-                </div>
-                <div className="ad-stat">
-                  <div className="ad-stat-label">Pending Approvals</div>
-                  <div className="ad-stat-value">{stats.pendingApprovals}</div>
                 </div>
                 <div className="ad-stat">
                   <div className="ad-stat-label">Open Disputes</div>
@@ -495,59 +461,6 @@ export default function AdminDashboard() {
               <div className="ad-loading">Loading…</div>
             ) : (
               <>
-                {/* ══ DASHBOARD + APPROVALS — pending table ══ */}
-                {(section === 'dashboard' || section === 'approvals') && (
-                  <>
-                    <p className="ad-section-title">Pending approvals</p>
-                    <div className="ad-card">
-                      {pending.length === 0 ? (
-                        <div className="ad-empty">No accounts awaiting approval.</div>
-                      ) : (
-                        <table className="ad-table">
-                          <thead>
-                            <tr>
-                              <th>Name</th>
-                              <th>Role</th>
-                              <th>Phone</th>
-                              <th>Submitted</th>
-                              <th>Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {pending.map(u => (
-                              <tr key={u.user_id}>
-                                <td>
-                                  <div className="ad-table-name">{u.name}</div>
-                                  <div className="ad-table-sub">{u.email}</div>
-                                </td>
-                                <td>{rolePill(u.role)}</td>
-                                <td>{u.phone_number}</td>
-                                <td>{fmt(u.created_at)}</td>
-                                <td>
-                                  <button
-                                    className="ad-btn ad-btn-green"
-                                    disabled={!!busy[`approve-${u.user_id}`]}
-                                    onClick={() => handleApprove(u.user_id)}
-                                  >
-                                    {busy[`approve-${u.user_id}`] ? '…' : 'Approve'}
-                                  </button>
-                                  <button
-                                    className="ad-btn ad-btn-red"
-                                    disabled={!!busy[`reject-${u.user_id}`]}
-                                    onClick={() => handleReject(u.user_id)}
-                                  >
-                                    {busy[`reject-${u.user_id}`] ? '…' : 'Reject'}
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  </>
-                )}
-
                 {/* ══ MANAGE USERS ══ */}
                 {section === 'users' && (
                   <>
