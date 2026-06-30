@@ -576,7 +576,6 @@ export default function CoordinatorDashboard() {
 
   const NAV_TABS = [
     { key: 'overview', label: 'Overview' },
-    { key: 'heatmap',  label: 'Heatmap'  },
     { key: 'export',   label: 'Export'   },
   ];
 
@@ -589,8 +588,7 @@ export default function CoordinatorDashboard() {
         <header className="cd-header">
           <div className="cd-header-inner">
             <div className="cd-logo">
-              <div className="cd-logo-icon">📊</div>
-              Coordinator
+              Environmental Coordinator Dashboard
             </div>
 
             <nav className="cd-header-tabs">
@@ -766,14 +764,12 @@ export default function CoordinatorDashboard() {
                     </div>
 
                   </div>
-                </>
-              )}
 
-              {/* ══ HEATMAP TAB ══ */}
-              {tab === 'heatmap' && (
-                <div className="cd-panel" style={{ padding: 0, overflow: 'hidden' }}>
-                  <HeatmapPane points={points} />
-                </div>
+                  {/* Collection heatmap */}
+                  <div className="cd-panel" style={{ padding: 0, overflow: 'hidden', marginTop: 20 }}>
+                    <HeatmapPane points={points} />
+                  </div>
+                </>
               )}
 
               {/* ══ EXPORT TAB ══ */}
