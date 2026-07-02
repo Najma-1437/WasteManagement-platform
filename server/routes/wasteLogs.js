@@ -6,10 +6,16 @@ const {
   createLog,
   getMyLogs,
   getLogById,
+  deleteLog,
+  getMyEarnings,
+  getMyMatches,
 } = require("../controllers/wasteLogs.controller");
 
 router.post("/", authenticate, authorize("collector"), createLog);
 router.get("/my", authenticate, authorize("collector"), getMyLogs);
+router.get("/my/earnings", authenticate, authorize("collector"), getMyEarnings);
+router.get("/my/matches", authenticate, authorize("collector"), getMyMatches);
 router.get("/:id", authenticate, getLogById);
+router.delete("/:id", authenticate, authorize("collector"), deleteLog);
 
 module.exports = router;

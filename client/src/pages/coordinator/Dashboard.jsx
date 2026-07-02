@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet.heat';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import { getHeatmap, getStats, exportReport } from '../../api/coordinator';
 import { useAuthStore } from '../../store/authStore';
 
@@ -340,10 +339,9 @@ const css = `
     overflow: hidden;
     height: 500px;
   }
-  .cd-map-wrap .leaflet-container {
+  .cd-map-wrap .mapboxgl-map {
     height: 100%;
     width: 100%;
-    z-index: 1;
   }
   .cd-map-empty {
     position: absolute;
@@ -427,45 +425,73 @@ const css = `
   }
 `;
 
-// ── Heatmap pane (vanilla Leaflet + leaflet.heat) ─────────────────────────
+function buildGeoJSON(pts) {
+  return {
+    type: 'FeatureCollection',
+    features: pts.map(p => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+      properties: {},
+    })),
+  };
+}
+
+// ── Heatmap pane (Mapbox GL JS) ───────────────────────────────────────────
 function HeatmapPane({ points }) {
   const containerRef = useRef(null);
   const mapRef       = useRef(null);
-  const heatRef      = useRef(null);
+  const loadedRef    = useRef(false);
+  const pointsRef    = useRef(points);
+  useEffect(() => { pointsRef.current = points; });
 
-  // Init / update heat layer whenever points change
   useEffect(() => {
     if (!containerRef.current) return;
-
-    if (!mapRef.current) {
-      mapRef.current = L.map(containerRef.current).setView([-1.2864, 36.8172], 12);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      }).addTo(mapRef.current);
-    }
-
-    if (heatRef.current) {
-      mapRef.current.removeLayer(heatRef.current);
-      heatRef.current = null;
-    }
-
-    if (points.length > 0) {
-      heatRef.current = L.heatLayer(
-        points.map(p => [p.lat, p.lng, 1]),
-        { radius: 25, blur: 15, maxZoom: 17 },
-      ).addTo(mapRef.current);
-    }
-  }, [points]);
-
-  // Cleanup on unmount
-  useEffect(() => {
+    mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
+    const map = new mapboxgl.Map({
+      container: containerRef.current,
+      style: 'mapbox://styles/mapbox/dark-v11',
+      center: [36.8172, -1.2864],
+      zoom: 11,
+    });
+    mapRef.current = map;
+    map.on('load', () => {
+      loadedRef.current = true;
+      map.addSource('waste-heat', {
+        type: 'geojson',
+        data: buildGeoJSON(pointsRef.current),
+      });
+      map.addLayer({
+        id: 'waste-heat-layer',
+        type: 'heatmap',
+        source: 'waste-heat',
+        paint: {
+          'heatmap-weight': 1,
+          'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 10, 1, 15, 3],
+          'heatmap-radius':    ['interpolate', ['linear'], ['zoom'], 10, 20, 15, 40],
+          'heatmap-opacity': 0.85,
+          'heatmap-color': [
+            'interpolate', ['linear'], ['heatmap-density'],
+            0,   'rgba(0,0,255,0)',
+            0.2, '#3B82F6',
+            0.4, '#22C55E',
+            0.6, '#F59E0B',
+            0.8, '#EF4444',
+            1,   '#B91C1C',
+          ],
+        },
+      });
+    });
     return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
+      map.remove();
+      mapRef.current    = null;
+      loadedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!loadedRef.current || !mapRef.current) return;
+    mapRef.current.getSource('waste-heat')?.setData(buildGeoJSON(points));
+  }, [points]);
 
   return (
     <div className="cd-map-wrap">
@@ -530,7 +556,16 @@ export default function CoordinatorDashboard() {
     }
   }, []);
 
-  useEffect(() => { fetchData(filters); }, []);
+  useEffect(() => {
+    const params = { from: getWeekStart(), to: todayStr() };
+    Promise.all([getStats(params), getHeatmap(params)])
+      .then(([sRes, hRes]) => {
+        setStats(sRes.data);
+        setPoints(hRes.data.points);
+      })
+      .catch(err => setError(err.response?.data?.error || 'Failed to load dashboard data'))
+      .finally(() => setLoading(false));
+  }, []);
 
   function applyFilter(update) {
     const next = { ...filters, ...update };

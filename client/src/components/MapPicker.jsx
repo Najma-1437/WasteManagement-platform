@@ -1,4 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
+
+mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
+
+const NAIROBI = { lat: -1.2921, lng: 36.8219 };
 
 const GPS_ERRORS = {
   1: 'Location permission was denied. Please allow location access in your browser, or search for your area below.',
@@ -22,7 +28,65 @@ export default function MapPicker({ onSelect }) {
   const [showManual, setShowManual] = useState(false);
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
-  const searchRef = useRef(null);
+  // Mapbox refs
+  const mapContainerRef = useRef(null);
+  const mapRef    = useRef(null);
+  const markerRef = useRef(null);
+
+  // Always-current onSelect, so map handlers never close over a stale prop
+  // without forcing the init effect (and therefore the map) to re-run.
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  });
+
+  /* ── Init map once, marker starts at Nairobi centre.
+     Repositioning only happens via marker drag, GPS, or search —
+     no click-anywhere, to match coordinator/buyer map behavior. ── */
+  useEffect(() => {
+    if (mapRef.current || !mapContainerRef.current) return;
+
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style:     'mapbox://styles/mapbox/streets-v12',
+      center:    [NAIROBI.lng, NAIROBI.lat],
+      zoom:      12,
+    });
+
+    const marker = new mapboxgl.Marker({ color: '#1F6F4A', draggable: true })
+      .setLngLat([NAIROBI.lng, NAIROBI.lat])
+      .addTo(map);
+
+    // Dragging the pin is itself a selection method
+    marker.on('dragend', () => {
+      const { lng: newLng, lat: newLat } = marker.getLngLat();
+      const roundedLat = parseFloat(newLat.toFixed(6));
+      const roundedLng = parseFloat(newLng.toFixed(6));
+      setLat(String(roundedLat));
+      setLng(String(roundedLng));
+      setSelected(`${roundedLat}, ${roundedLng} (map pin)`);
+      setGpsState('ok');
+      onSelectRef.current({ lat: roundedLat, lng: roundedLng });
+    });
+
+    mapRef.current    = map;
+    markerRef.current = marker;
+
+    return () => {
+      map.remove();
+      mapRef.current    = null;
+      markerRef.current = null;
+    };
+  }, []);
+
+  /* ── Whenever lat/lng change via GPS, search, or manual entry, move the pin ── */
+  useEffect(() => {
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+    if (!markerRef.current || isNaN(latNum) || isNaN(lngNum)) return;
+    markerRef.current.setLngLat([lngNum, latNum]);
+    mapRef.current?.easeTo({ center: [lngNum, latNum], zoom: 14, duration: 600 });
+  }, [lat, lng]);
 
   /* ── GPS ── */
   function handleGPS() {
@@ -41,7 +105,7 @@ export default function MapPicker({ onSelect }) {
         setLng(String(newLng));
         setSelected(`${newLat}, ${newLng} (GPS)`);
         setGpsState('ok');
-        onSelect({ lat: newLat, lng: newLng });
+        onSelectRef.current({ lat: newLat, lng: newLng });
       },
       (err) => {
         setGpsState('error');
@@ -53,7 +117,7 @@ export default function MapPicker({ onSelect }) {
 
   /* ── Place search (Nominatim / OpenStreetMap) ── */
   async function handleSearch(e) {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
     if (!query.trim()) return;
     setSearching(true);
     setResults([]);
@@ -81,7 +145,7 @@ export default function MapPicker({ onSelect }) {
     setQuery('');
     setGpsState('ok');
     setGpsMsg('');
-    onSelect({ lat: newLat, lng: newLng });
+    onSelectRef.current({ lat: newLat, lng: newLng });
   }
 
   /* ── Manual coordinates ── */
@@ -91,19 +155,37 @@ export default function MapPicker({ onSelect }) {
       setLat(value);
       if (!isNaN(num) && lng !== '') {
         setSelected(`${num}, ${parseFloat(lng)}`);
-        onSelect({ lat: num, lng: parseFloat(lng) });
+        onSelectRef.current({ lat: num, lng: parseFloat(lng) });
       }
     } else {
       setLng(value);
       if (!isNaN(num) && lat !== '') {
         setSelected(`${parseFloat(lat)}, ${num}`);
-        onSelect({ lat: parseFloat(lat), lng: num });
+        onSelectRef.current({ lat: parseFloat(lat), lng: num });
       }
     }
   }
 
   return (
     <div style={{ fontSize: 13, color: '#1A1A1A' }}>
+
+      {/* Mapbox map */}
+      <div style={{
+        position: 'relative', height: 180, borderRadius: 10,
+        overflow: 'hidden', marginBottom: 10, border: '1px solid #E5E0D8',
+      }}>
+        <div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
+        {!selected && (
+          <div style={{
+            position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
+            background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 11,
+            padding: '4px 10px', borderRadius: 16, pointerEvents: 'none',
+            whiteSpace: 'nowrap', zIndex: 5,
+          }}>
+            Drag the pin, use GPS, or search to set a location
+          </div>
+        )}
+      </div>
 
       {/* GPS button */}
       <button
@@ -142,16 +224,18 @@ export default function MapPicker({ onSelect }) {
       </div>
 
       {/* Place search */}
-      <form onSubmit={handleSearch} style={{ display: 'flex', gap: 6, marginBottom: 6 }} ref={searchRef}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
         <input
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); } }}
           placeholder="e.g. Kibera, Nairobi"
           style={{ ...inputStyle, flex: 1 }}
         />
         <button
-          type="submit"
+          type="button"
+          onClick={handleSearch}
           disabled={searching}
           style={{
             padding: '9px 14px', borderRadius: 8, border: 'none',
@@ -162,7 +246,7 @@ export default function MapPicker({ onSelect }) {
         >
           {searching ? '…' : 'Search'}
         </button>
-      </form>
+      </div>
 
       {/* Search results */}
       {results.length > 0 && (

@@ -226,10 +226,10 @@ exports.confirmMatch = async (req, res, next) => {
     // Optimistic lock: only succeeds if log is still pending
     const logResult = await pool.query(
       `UPDATE waste_logs
-       SET status = 'matched'
+       SET status = 'matched', matched_buyer_id = $2, matched_offer_id = $3
        WHERE log_id = $1 AND status = 'pending'
        RETURNING log_id, weight_kg, status`,
-      [logId]
+      [logId, buyerId, offer_id]
     );
 
     if (logResult.rows.length === 0) {
@@ -239,10 +239,10 @@ exports.confirmMatch = async (req, res, next) => {
     const weightKg = parseFloat(logResult.rows[0].weight_kg);
     const amountKes = (weightKg * pricePerKg).toFixed(2);
 
-    // Notify collector via SMS (fire-and-forget; never blocks or throws)
+    // Notify collector via SMS + in-app (fire-and-forget; never blocks or throws)
     try {
       const collectorInfo = await pool.query(
-        `SELECT u.phone_number, wl.category
+        `SELECT u.phone_number, u.user_id, wl.category
          FROM waste_logs wl
          JOIN collectors c ON c.collector_id = wl.collector_id
          JOIN users u ON u.user_id = c.user_id
@@ -250,11 +250,16 @@ exports.confirmMatch = async (req, res, next) => {
         [logId]
       );
       if (collectorInfo.rows.length > 0) {
-        const { phone_number, category } = collectorInfo.rows[0];
+        const { phone_number, user_id, category } = collectorInfo.rows[0];
+        const msg = `Your ${weightKg}kg ${category} log has been matched with a buyer.`;
         smsService.sendSms(
           phone_number,
-          `WasteManagement: Your ${weightKg}kg ${category} log has been matched with a buyer. Check the app for details.`
+          `WasteManagement: ${msg} Check the app for details.`
         );
+        pool.query(
+          `INSERT INTO notifications (user_id, channel, message) VALUES ($1, 'in-app', $2)`,
+          [user_id, msg]
+        ).catch(err => console.error('[confirmMatch] in-app notification error:', err));
       }
     } catch (smsErr) {
       console.error('[confirmMatch] SMS notification error:', smsErr);
