@@ -47,6 +47,13 @@ const register = async (req, res, next) => {
       return res.status(400).json({ error: "All fields are required" });
     }
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
+    if (typeof password !== "string" || password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+
     const allowedRoles = ["collector", "buyer", "coordinator"];
     if (!allowedRoles.includes(role)) {
       return res.status(400).json({ error: "Invalid role" });

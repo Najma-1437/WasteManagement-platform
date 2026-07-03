@@ -11,8 +11,18 @@ const createLog = async (req, res, next) => {
         .json({ error: "Category, weight, and location are all required" });
     }
 
-    if (parseFloat(weight_kg) <= 0) {
-      return res.status(400).json({ error: "Weight must be greater than 0" });
+    const weight = parseFloat(weight_kg);
+    if (!Number.isFinite(weight) || weight <= 0) {
+      return res.status(400).json({ error: "Weight must be a number greater than 0" });
+    }
+
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+      return res.status(400).json({ error: "Latitude must be a number between -90 and 90" });
+    }
+    if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+      return res.status(400).json({ error: "Longitude must be a number between -180 and 180" });
     }
 
     // Idempotency: if this client_id was already processed, return the
