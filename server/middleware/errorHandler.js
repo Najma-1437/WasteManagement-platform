@@ -2,7 +2,12 @@
 const isPgError = (err) => typeof err.code === 'string' && /^[0-9A-Z]{5}$/.test(err.code);
 
 module.exports = (err, req, res, next) => {
-  console.error(`[ERROR] ${err.message}`, err.detail ? `| detail: ${err.detail}` : '');
+  const parts = [`[ERROR] ${req.method} ${req.originalUrl} — ${err.message}`];
+  if (err.detail) parts.push(`| detail: ${err.detail}`);
+  // Node's fetch() throws a generic "fetch failed"; the real reason
+  // (ENOTFOUND, ETIMEDOUT, cert errors…) lives in err.cause.
+  if (err.cause) parts.push(`| cause: ${err.cause.code || err.cause.message || err.cause}`);
+  console.error(...parts);
   if (err.code === '23505') {
     return res.status(409).json({ error: 'Record already exists.' });
   }

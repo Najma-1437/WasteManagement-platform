@@ -1,5 +1,23 @@
 const pool = require('../config/db');
 const smsService = require('../services/sms.service');
+const { fetch: undiciFetch, Agent } = require('undici');
+
+// Daraja sits behind the Imperva WAF; TLS setup intermittently takes 5-10s+,
+// which trips undici's default 10s connect timeout (UND_ERR_CONNECT_TIMEOUT).
+// Allow 15s to connect and retry once immediately — a connect timeout means
+// the request never reached Safaricom, so retrying cannot double-send.
+// The retry gets a tighter 5s budget so the user-facing worst case stays ~20s.
+const darajaAgent = new Agent({ connectTimeout: 15000 });
+const darajaRetryAgent = new Agent({ connectTimeout: 5000 });
+
+async function darajaFetch(url, options) {
+  try {
+    return await undiciFetch(url, { ...options, dispatcher: darajaAgent });
+  } catch (err) {
+    if (err.cause?.code !== 'UND_ERR_CONNECT_TIMEOUT') throw err;
+    return undiciFetch(url, { ...options, dispatcher: darajaRetryAgent });
+  }
+}
 
 // Helper: resolve buyer_id from the authenticated user_id
 async function getBuyerId(userId) {
@@ -346,7 +364,7 @@ exports.initiatePayment = async (req, res, next) => {
 
     const token = await getMpesaToken();
 
-    const stkRes = await fetch(`https://${host}/mpesa/stkpush/v1/processrequest`, {
+    const stkRes = await darajaFetch(`https://${host}/mpesa/stkpush/v1/processrequest`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -482,7 +500,7 @@ exports.confirmReceipt = async (req, res, next) => {
 
     console.log('[B2C confirmReceipt] Initiating payout to', phone, 'amount', Math.ceil(parseFloat(tx.amount_kes)));
 
-    const b2cRes = await fetch(`https://${host}/mpesa/b2c/v1/paymentrequest`, {
+    const b2cRes = await darajaFetch(`https://${host}/mpesa/b2c/v1/paymentrequest`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
