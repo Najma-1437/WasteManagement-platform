@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import api from '../../api/axiosClient';
 import NotificationBell from '../../components/NotificationBell';
+import EditLogModal from '../../components/EditLogModal';
 
 const PAGE_SIZE = 20;
 
@@ -118,8 +119,16 @@ const css = `
   .cd-pill-released         { background: #E7F4EC; color: #1e6b3c; }
   .cd-pill-paid             { background: #E7F4EC; color: #1e6b3c; }
   .cd-pill-payout_failed    { background: #FDECEA; color: #B3261E; }
+  .cd-pill-confirmed        { background: #FFF4E5; color: #D97706; }
+  .cd-pill-disputed         { background: #FDECEA; color: #B3261E; }
 
-  /* ── Delete button ── */
+  /* ── Edit / Delete buttons ── */
+  .cd-edit-btn {
+    background: none; border: none; cursor: pointer; font-size: 14px;
+    color: ${C.primary}; padding: 3px 6px; border-radius: 6px; line-height: 1;
+    transition: background 0.12s; font-family: inherit;
+  }
+  .cd-edit-btn:hover { background: #EAF4EE; }
   .cd-delete-btn {
     background: none; border: none; cursor: pointer; font-size: 14px;
     color: #e53e3e; padding: 3px 6px; border-radius: 6px; line-height: 1;
@@ -204,6 +213,7 @@ export default function AllLogs() {
   const [logs, setLogs]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage]       = useState(1);
+  const [editingLog, setEditingLog] = useState(null);
 
   useEffect(() => {
     api.get('/waste-logs/my')
@@ -220,6 +230,11 @@ export default function AllLogs() {
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to delete log.');
     }
+  };
+
+  const handleEditSaved = (updated) => {
+    setLogs(prev => prev.map(l => (l.log_id === updated.log_id ? { ...l, ...updated } : l)));
+    setEditingLog(null);
   };
 
   function handleLogout() {
@@ -362,22 +377,37 @@ export default function AllLogs() {
                               {log.category}
                             </td>
                             <td>{parseFloat(log.weight_kg).toFixed(2)} kg</td>
-                            <td style={{ color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
-                              {formatLocation(log.latitude, log.longitude)}
+                            <td
+                              style={{
+                                color: C.muted, maxWidth: 220, overflow: 'hidden',
+                                textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              }}
+                              title={log.address || undefined}
+                            >
+                              {log.address || formatLocation(log.latitude, log.longitude)}
                             </td>
                             <td><StatusPill status={log.status} /></td>
                             <td style={{ color: C.muted, whiteSpace: 'nowrap' }}>
                               {formatDate(log.created_at)}
                             </td>
-                            <td style={{ width: 40, textAlign: 'center' }}>
+                            <td style={{ width: 72, textAlign: 'center', whiteSpace: 'nowrap' }}>
                               {log.status === 'pending' && (
-                                <button
-                                  className="cd-delete-btn"
-                                  onClick={() => handleDelete(log.log_id)}
-                                  title="Delete log"
-                                >
-                                  🗑
-                                </button>
+                                <>
+                                  <button
+                                    className="cd-edit-btn"
+                                    onClick={() => setEditingLog(log)}
+                                    title="Edit log"
+                                  >
+                                    ✎
+                                  </button>
+                                  <button
+                                    className="cd-delete-btn"
+                                    onClick={() => handleDelete(log.log_id)}
+                                    title="Delete log"
+                                  >
+                                    🗑
+                                  </button>
+                                </>
                               )}
                             </td>
                           </tr>
@@ -415,6 +445,15 @@ export default function AllLogs() {
         </div>
 
       </div>
+
+      {/* ── Edit log modal ── */}
+      {editingLog && (
+        <EditLogModal
+          log={editingLog}
+          onClose={() => setEditingLog(null)}
+          onSaved={handleEditSaved}
+        />
+      )}
     </>
   );
 }

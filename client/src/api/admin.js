@@ -1,9 +1,6 @@
 import axiosClient from './axiosClient';
 
 export const getStats          = ()           => axiosClient.get('/admin/stats');
-export const getPending        = ()           => axiosClient.get('/admin/pending');
-export const approveUser       = (id)         => axiosClient.patch(`/admin/users/${id}/approve`);
-export const rejectUser        = (id)         => axiosClient.patch(`/admin/users/${id}/reject`);
 export const getUsers          = ()           => axiosClient.get('/admin/users');
 export const updateUserStatus  = (id, status) => axiosClient.patch(`/admin/users/${id}/status`, { status });
 export const getDisputes       = ()           => axiosClient.get('/admin/disputes');

@@ -18,16 +18,24 @@ const inputStyle = {
   boxSizing: 'border-box', outline: 'none', background: '#fff',
 };
 
-export default function MapPicker({ onSelect }) {
+export default function MapPicker({ onSelect, initial }) {
+  const hasInitial =
+    initial && Number.isFinite(parseFloat(initial.lat)) && Number.isFinite(parseFloat(initial.lng));
   const [gpsState, setGpsState] = useState('idle'); // idle | loading | ok | error
   const [gpsMsg, setGpsMsg]     = useState('');
   const [query, setQuery]       = useState('');
   const [results, setResults]   = useState([]);
   const [searching, setSearching] = useState(false);
-  const [selected, setSelected] = useState('');
+  const [selected, setSelected] = useState(
+    hasInitial ? `${parseFloat(initial.lat)}, ${parseFloat(initial.lng)} (current location)` : ''
+  );
   const [showManual, setShowManual] = useState(false);
-  const [lat, setLat] = useState('');
-  const [lng, setLng] = useState('');
+  const [lat, setLat] = useState(hasInitial ? String(parseFloat(initial.lat)) : '');
+  const [lng, setLng] = useState(hasInitial ? String(parseFloat(initial.lng)) : '');
+  // Where the map + marker start; `initial` is only read on mount.
+  const startRef = useRef(
+    hasInitial ? { lat: parseFloat(initial.lat), lng: parseFloat(initial.lng) } : NAIROBI
+  );
   // Mapbox refs
   const mapContainerRef = useRef(null);
   const mapRef    = useRef(null);
@@ -46,15 +54,16 @@ export default function MapPicker({ onSelect }) {
   useEffect(() => {
     if (mapRef.current || !mapContainerRef.current) return;
 
+    const start = startRef.current;
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
       style:     'mapbox://styles/mapbox/streets-v12',
-      center:    [NAIROBI.lng, NAIROBI.lat],
+      center:    [start.lng, start.lat],
       zoom:      12,
     });
 
     const marker = new mapboxgl.Marker({ color: '#1F6F4A', draggable: true })
-      .setLngLat([NAIROBI.lng, NAIROBI.lat])
+      .setLngLat([start.lng, start.lat])
       .addTo(map);
 
     // Dragging the pin is itself a selection method

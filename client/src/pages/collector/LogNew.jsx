@@ -301,6 +301,88 @@ const css = `
     font-size: 12px;
     color: ${C.danger};
   }
+  /* ── Place search (Nominatim, same as buyer MapPicker) ── */
+  .ln-search-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 10px;
+  }
+  .ln-search-divider-line { flex: 1; height: 1px; background: ${C.border}; }
+  .ln-search-divider-text {
+    font-size: 11px;
+    color: #9CA3AF;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .ln-search-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .ln-search-input {
+    flex: 1;
+    padding: 9px 12px;
+    border: 1px solid ${C.border};
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    background: #FAFAFA;
+    transition: border-color 0.15s;
+    min-width: 0;
+  }
+  .ln-search-input:focus { border-color: ${C.primary}; background: ${C.white}; }
+  .ln-search-btn {
+    padding: 9px 14px;
+    border-radius: 8px;
+    border: none;
+    background: ${C.primary};
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: inherit;
+  }
+  .ln-search-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+  .ln-search-results {
+    margin: 0 0 10px;
+    padding: 0;
+    list-style: none;
+    border: 1px solid ${C.border};
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    background: ${C.white};
+  }
+  .ln-search-result {
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    border-bottom: 1px solid #F3F4F6;
+    line-height: 1.4;
+    transition: background 0.1s;
+  }
+  .ln-search-result:last-child { border-bottom: none; }
+  .ln-search-result:hover { background: #F0F7F3; }
+  .ln-search-result-name { font-weight: 600; }
+  .ln-search-result-detail { color: ${C.muted}; margin-left: 4px; }
+  .ln-search-msg {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: ${C.muted};
+  }
+  .ln-search-picked {
+    margin: 0 0 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: #EAF4EE;
+    color: ${C.primary};
+    font-size: 12px;
+    word-break: break-word;
+  }
+
   .ln-manual-toggle {
     display: inline-block;
     margin-top: 8px;
@@ -440,6 +522,11 @@ export default function LogNew() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError]     = useState('');
   const [showManual, setShowManual] = useState(false);
+  const [searchQuery, setSearchQuery]     = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching]         = useState(false);
+  const [searchMsg, setSearchMsg]         = useState('');
+  const [searchPicked, setSearchPicked]   = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState('');
   const [success, setSuccess]       = useState('');
@@ -466,6 +553,7 @@ export default function LogNew() {
         }));
         setGpsLoading(false);
         setShowManual(false);
+        setSearchPicked('');
       },
       () => {
         setGpsError('Could not get location. Enter coordinates manually.');
@@ -476,9 +564,42 @@ export default function LogNew() {
     );
   };
 
+  // Place search (Nominatim / OpenStreetMap) — same flow as the buyer-side MapPicker
+  const handleSearch = async () => {
+    if (!searchQuery.trim() || searching) return;
+    setSearching(true);
+    setSearchResults([]);
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=5&addressdetails=1`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+      const data = await res.json();
+      setSearchResults(data);
+      setSearchMsg(data.length === 0 ? 'No places found. Try a different name or enter coordinates manually.' : '');
+    } catch {
+      setSearchMsg('Search failed. Check your connection or enter coordinates manually.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const pickSearchResult = (r) => {
+    setForm(f => ({
+      ...f,
+      latitude:  parseFloat(r.lat).toFixed(6),
+      longitude: parseFloat(r.lon).toFixed(6),
+    }));
+    setSearchPicked(r.display_name);
+    setSearchResults([]);
+    setSearchQuery('');
+    setSearchMsg('');
+    setGpsError('');
+  };
+
   // Auto-capture GPS on mount + track online status
   useEffect(() => {
-    captureGPS();
+    // Deferred a tick: captureGPS sets state synchronously, which isn't
+    // allowed directly in an effect body (react-hooks/set-state-in-effect).
+    const gpsTimer = setTimeout(captureGPS, 0);
     const onOnline = () => {
       setIsOnline(true);
       syncQueuedLogs().catch(() => {}); // drain queue on reconnect
@@ -487,10 +608,10 @@ export default function LogNew() {
     window.addEventListener('online',  onOnline);
     window.addEventListener('offline', onOffline);
     return () => {
+      clearTimeout(gpsTimer);
       window.removeEventListener('online',  onOnline);
       window.removeEventListener('offline', onOffline);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Initialise map with a draggable marker; dragend writes back to form state
@@ -512,6 +633,7 @@ export default function LogNew() {
         latitude:  lat.toFixed(6),
         longitude: lng.toFixed(6),
       }));
+      setSearchPicked('');
     });
     mapRef.current    = map;
     markerRef.current = marker;
@@ -746,6 +868,57 @@ export default function LogNew() {
                 </div>
 
                 {gpsError && <p className="ln-gps-error">{gpsError}</p>}
+
+                <div className="ln-search-divider">
+                  <div className="ln-search-divider-line" />
+                  <span className="ln-search-divider-text">OR SEARCH BY PLACE NAME</span>
+                  <div className="ln-search-divider-line" />
+                </div>
+
+                <div className="ln-search-row">
+                  <input
+                    className="ln-search-input"
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); } }}
+                    placeholder="e.g. Kibera, Nairobi"
+                  />
+                  <button
+                    type="button"
+                    className="ln-search-btn"
+                    onClick={handleSearch}
+                    disabled={searching}
+                  >
+                    {searching ? '…' : 'Search'}
+                  </button>
+                </div>
+
+                {searchMsg && <p className="ln-search-msg">{searchMsg}</p>}
+
+                {searchResults.length > 0 && (
+                  <ul className="ln-search-results">
+                    {searchResults.map(r => (
+                      <li
+                        key={r.place_id}
+                        className="ln-search-result"
+                        onClick={() => pickSearchResult(r)}
+                      >
+                        <span className="ln-search-result-name">
+                          {r.address?.suburb || r.address?.neighbourhood || r.address?.city || r.name}
+                        </span>
+                        <span className="ln-search-result-detail">
+                          {[r.address?.city, r.address?.county, r.address?.country]
+                            .filter(Boolean).join(', ')}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {searchPicked && (
+                  <p className="ln-search-picked">✓ {searchPicked}</p>
+                )}
 
                 <button
                   className="ln-manual-toggle"

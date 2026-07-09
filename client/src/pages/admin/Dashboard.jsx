@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import {
-  getStats, getPending, approveUser, rejectUser,
-  getUsers, updateUserStatus, getDisputes, resolveDispute,
+  getStats, getUsers, updateUserStatus, getDisputes, resolveDispute,
 } from '../../api/admin';
 
 const css = `
@@ -202,6 +201,30 @@ const css = `
   .pill-active      { background: #dcfce7; color: #15803d; }
   .pill-pending     { background: #fef9c3; color: #a16207; }
   .pill-suspended   { background: #fee2e2; color: #b91c1c; }
+  .pill-reason      { background: #FBF3E4; color: #B07818; }
+
+  /* ── Dispute details (truncate / expand) ── */
+  .ad-details {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #6B7280;
+    line-height: 1.45;
+    max-width: 260px;
+    word-break: break-word;
+  }
+  .ad-details-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-left: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1F6F4A;
+    cursor: pointer;
+    font-family: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 
   /* ── Buttons ────────────────────────────────────────────────── */
   .ad-btn {
@@ -277,10 +300,9 @@ const css = `
 `;
 
 const NAV = [
-  { key: 'dashboard', label: 'Dashboard',         icon: '▦' },
-  { key: 'approvals', label: 'Pending Approvals',  icon: '✓' },
-  { key: 'users',     label: 'Manage Users',        icon: '⊞' },
-  { key: 'disputes',  label: 'Disputes',            icon: '⚠' },
+  { key: 'dashboard', label: 'Dashboard',    icon: '▦' },
+  { key: 'users',     label: 'Manage Users', icon: '⊞' },
+  { key: 'disputes',  label: 'Disputes',     icon: '⚠' },
 ];
 
 function rolePill(role) {
@@ -292,6 +314,22 @@ function statusPill(status) {
 function fmt(dateStr) {
   return new Date(dateStr).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
 }
+function fmtDateTime(dateStr) {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleString('en-KE', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+const REASON_LABELS = {
+  wrong_weight:   'Wrong weight',
+  wrong_category: 'Wrong category',
+  no_show:        'No-show',
+  payment_issue:  'Payment issue',
+  other:          'Other',
+};
+
+const DETAILS_PREVIEW_LEN = 60;
 
 export default function AdminDashboard() {
   const { user, logout } = useAuthStore();
@@ -299,12 +337,12 @@ export default function AdminDashboard() {
 
   const [section,  setSection]  = useState('dashboard');
   const [stats,    setStats]    = useState(null);
-  const [pending,  setPending]  = useState([]);
   const [users,    setUsers]    = useState([]);
   const [disputes, setDisputes] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
   const [busy,     setBusy]     = useState({});  // tracks per-row loading state
+  const [expanded, setExpanded] = useState({});  // dispute rows with details expanded
 
   function handleLogout() {
     navigate('/', { replace: true });
@@ -315,17 +353,18 @@ export default function AdminDashboard() {
     try {
       const res = await getStats();
       setStats(res.data);
-    } catch {}
+    } catch {
+      /* stat refresh is best-effort; the stale numbers stay visible */
+    }
   }, []);
 
   const loadSection = useCallback(async (sec) => {
     setLoading(true);
     setError('');
     try {
-      if (sec === 'dashboard' || sec === 'approvals') {
-        const [sRes, pRes] = await Promise.all([getStats(), getPending()]);
+      if (sec === 'dashboard') {
+        const sRes = await getStats();
         setStats(sRes.data);
-        setPending(pRes.data.pending);
       } else if (sec === 'users') {
         const [sRes, uRes] = await Promise.all([getStats(), getUsers()]);
         setStats(sRes.data);
@@ -342,7 +381,12 @@ export default function AdminDashboard() {
     }
   }, []);
 
-  useEffect(() => { loadSection(section); }, [section, loadSection]);
+  useEffect(() => {
+    // Deferred a tick: loadSection sets state synchronously, which isn't
+    // allowed directly in an effect body (react-hooks/set-state-in-effect).
+    const t = setTimeout(() => loadSection(section), 0);
+    return () => clearTimeout(t);
+  }, [section, loadSection]);
 
   async function withBusy(key, fn) {
     setBusy(b => ({ ...b, [key]: true }));
@@ -350,22 +394,6 @@ export default function AdminDashboard() {
     try { await fn(); }
     catch (err) { setError(err.response?.data?.error || 'Action failed'); }
     finally { setBusy(b => ({ ...b, [key]: false })); }
-  }
-
-  async function handleApprove(userId) {
-    await withBusy(`approve-${userId}`, async () => {
-      await approveUser(userId);
-      setPending(p => p.filter(u => u.user_id !== userId));
-      refreshStats();
-    });
-  }
-
-  async function handleReject(userId) {
-    await withBusy(`reject-${userId}`, async () => {
-      await rejectUser(userId);
-      setPending(p => p.filter(u => u.user_id !== userId));
-      refreshStats();
-    });
   }
 
   async function handleToggleStatus(u) {
@@ -384,12 +412,10 @@ export default function AdminDashboard() {
     });
   }
 
-  const pendingCount  = stats?.pendingApprovals ?? 0;
-  const disputeCount  = stats?.openDisputes     ?? 0;
+  const disputeCount  = stats?.openDisputes ?? 0;
 
   const sectionTitle = {
     dashboard: 'Admin overview',
-    approvals: 'Pending Approvals',
     users:     'Manage Users',
     disputes:  'Disputes',
   }[section];
@@ -417,9 +443,6 @@ export default function AdminDashboard() {
               >
                 <span className="ad-nav-icon">{n.icon}</span>
                 {n.label}
-                {n.key === 'approvals' && pendingCount > 0 && (
-                  <span className="ad-nav-badge">{pendingCount}</span>
-                )}
                 {n.key === 'disputes' && disputeCount > 0 && (
                   <span className="ad-nav-badge">{disputeCount}</span>
                 )}
@@ -453,8 +476,7 @@ export default function AdminDashboard() {
                 onClick={() => setSection(n.key)}
               >
                 {n.label}
-                {n.key === 'approvals' && pendingCount > 0 ? ` (${pendingCount})` : ''}
-                {n.key === 'disputes'  && disputeCount  > 0 ? ` (${disputeCount})`  : ''}
+                {n.key === 'disputes' && disputeCount > 0 ? ` (${disputeCount})` : ''}
               </button>
             ))}
           </div>
@@ -467,16 +489,12 @@ export default function AdminDashboard() {
 
             {error && <div className="ad-error">{error}</div>}
 
-            {/* Stat cards — shown on dashboard, approvals, and disputes */}
+            {/* Stat cards — shown on dashboard and disputes */}
             {stats && section !== 'users' && (
               <div className="ad-stats">
                 <div className="ad-stat">
                   <div className="ad-stat-label">Total Users</div>
                   <div className="ad-stat-value">{stats.totalUsers.toLocaleString()}</div>
-                </div>
-                <div className="ad-stat">
-                  <div className="ad-stat-label">Pending Approvals</div>
-                  <div className="ad-stat-value">{stats.pendingApprovals}</div>
                 </div>
                 <div className="ad-stat">
                   <div className="ad-stat-label">Open Disputes</div>
@@ -495,59 +513,6 @@ export default function AdminDashboard() {
               <div className="ad-loading">Loading…</div>
             ) : (
               <>
-                {/* ══ DASHBOARD + APPROVALS — pending table ══ */}
-                {(section === 'dashboard' || section === 'approvals') && (
-                  <>
-                    <p className="ad-section-title">Pending approvals</p>
-                    <div className="ad-card">
-                      {pending.length === 0 ? (
-                        <div className="ad-empty">No accounts awaiting approval.</div>
-                      ) : (
-                        <table className="ad-table">
-                          <thead>
-                            <tr>
-                              <th>Name</th>
-                              <th>Role</th>
-                              <th>Phone</th>
-                              <th>Submitted</th>
-                              <th>Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {pending.map(u => (
-                              <tr key={u.user_id}>
-                                <td>
-                                  <div className="ad-table-name">{u.name}</div>
-                                  <div className="ad-table-sub">{u.email}</div>
-                                </td>
-                                <td>{rolePill(u.role)}</td>
-                                <td>{u.phone_number}</td>
-                                <td>{fmt(u.created_at)}</td>
-                                <td>
-                                  <button
-                                    className="ad-btn ad-btn-green"
-                                    disabled={!!busy[`approve-${u.user_id}`]}
-                                    onClick={() => handleApprove(u.user_id)}
-                                  >
-                                    {busy[`approve-${u.user_id}`] ? '…' : 'Approve'}
-                                  </button>
-                                  <button
-                                    className="ad-btn ad-btn-red"
-                                    disabled={!!busy[`reject-${u.user_id}`]}
-                                    onClick={() => handleReject(u.user_id)}
-                                  >
-                                    {busy[`reject-${u.user_id}`] ? '…' : 'Reject'}
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  </>
-                )}
-
                 {/* ══ MANAGE USERS ══ */}
                 {section === 'users' && (
                   <>
@@ -579,7 +544,7 @@ export default function AdminDashboard() {
                                 <td>{statusPill(u.status)}</td>
                                 <td>{fmt(u.created_at)}</td>
                                 <td>
-                                  {u.role !== 'admin' && u.status !== 'pending' && (
+                                  {u.role !== 'admin' && (
                                     <button
                                       className="ad-btn ad-btn-ghost"
                                       disabled={!!busy[`status-${u.user_id}`]}
@@ -615,7 +580,9 @@ export default function AdminDashboard() {
                               <th>Weight</th>
                               <th>Collector</th>
                               <th>Buyer</th>
-                              <th>Date</th>
+                              <th>Reason</th>
+                              <th>Raised by</th>
+                              <th>Raised</th>
                               <th>Action</th>
                             </tr>
                           </thead>
@@ -629,7 +596,39 @@ export default function AdminDashboard() {
                                   <div className="ad-table-sub">{d.collector_phone}</div>
                                 </td>
                                 <td>{d.buyer_name ?? <span style={{ color: '#9ca3af' }}>—</span>}</td>
-                                <td>{fmt(d.created_at)}</td>
+                                <td>
+                                  {d.dispute_reason
+                                    ? <span className="pill pill-reason">{REASON_LABELS[d.dispute_reason] ?? d.dispute_reason}</span>
+                                    : <span style={{ color: '#9ca3af' }}>—</span>}
+                                  {d.dispute_details && (
+                                    <div className="ad-details">
+                                      {expanded[d.log_id] || d.dispute_details.length <= DETAILS_PREVIEW_LEN
+                                        ? d.dispute_details
+                                        : `${d.dispute_details.slice(0, DETAILS_PREVIEW_LEN)}…`}
+                                      {d.dispute_details.length > DETAILS_PREVIEW_LEN && (
+                                        <button
+                                          className="ad-details-toggle"
+                                          onClick={() => setExpanded(x => ({ ...x, [d.log_id]: !x[d.log_id] }))}
+                                        >
+                                          {expanded[d.log_id] ? 'less' : 'more'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </td>
+                                <td>
+                                  {d.disputed_by_name ? (
+                                    <>
+                                      <div className="ad-table-name">{d.disputed_by_name}</div>
+                                      <div className="ad-table-sub" style={{ textTransform: 'capitalize' }}>
+                                        {d.disputed_by_role}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <span style={{ color: '#9ca3af' }}>—</span>
+                                  )}
+                                </td>
+                                <td style={{ whiteSpace: 'nowrap' }}>{fmtDateTime(d.disputed_at)}</td>
                                 <td>
                                   <button
                                     className="ad-btn ad-btn-green"

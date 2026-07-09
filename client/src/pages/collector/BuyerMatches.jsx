@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import api from '../../api/axiosClient';
 import NotificationBell from '../../components/NotificationBell';
+import DisputeModal from '../../components/DisputeModal';
 
 const C = {
   primary:     '#1e6b3c',
@@ -19,7 +20,12 @@ const STATUS_META = {
   matched:   { label: 'Awaiting confirmation', cls: 'bm-pill-matched' },
   confirmed: { label: 'Payment processing',     cls: 'bm-pill-confirmed' },
   paid:      { label: 'Paid',                   cls: 'bm-pill-paid' },
+  disputed:  { label: 'Under dispute',          cls: 'bm-pill-disputed' },
 };
+
+// Statuses a collector can dispute — mirrors the server-side gate in
+// raiseDispute (wasteLogs.controller.js).
+const DISPUTABLE = ['matched', 'confirmed'];
 
 const css = `
   *, *::before, *::after { box-sizing: border-box; }
@@ -191,6 +197,23 @@ const css = `
   .bm-pill-matched   { background: #EFF6FF; color: #2563EB; }
   .bm-pill-confirmed { background: #FFF4E5; color: #D97706; }
   .bm-pill-paid      { background: #E7F4EC; color: #1e6b3c; }
+  .bm-pill-disputed  { background: #FDECEA; color: #B3261E; }
+
+  /* ── Raise dispute button ── */
+  .bm-dispute-btn {
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid #E8A33D;
+    background: transparent;
+    color: #B07818;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .bm-dispute-btn:hover { background: #FBF3E4; }
 
   /* ── Mobile top bar ── */
   .cd-mobile-top { display: none; }
@@ -260,6 +283,7 @@ export default function BuyerMatches() {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
+  const [disputing, setDisputing] = useState(null); // match being disputed
 
   useEffect(() => {
     api.get('/waste-logs/my/matches')
@@ -267,6 +291,13 @@ export default function BuyerMatches() {
       .catch(err => setError(err.response?.data?.error || 'Failed to load buyer matches.'))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleDisputed = (updated) => {
+    setMatches(prev => prev.map(m =>
+      m.log_id === updated.log_id ? { ...m, status: updated.status } : m
+    ));
+    setDisputing(null);
+  };
 
   function handleLogout() {
     navigate('/', { replace: true });
@@ -379,6 +410,7 @@ export default function BuyerMatches() {
                         <th>Price / kg</th>
                         <th>Status</th>
                         <th>Date</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -399,6 +431,16 @@ export default function BuyerMatches() {
                           <td style={{ color: C.muted, whiteSpace: 'nowrap' }}>
                             {formatDate(m.created_at)}
                           </td>
+                          <td style={{ textAlign: 'right' }}>
+                            {DISPUTABLE.includes(m.status) && (
+                              <button
+                                className="bm-dispute-btn"
+                                onClick={() => setDisputing(m)}
+                              >
+                                ⚠ Raise Dispute
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -411,6 +453,16 @@ export default function BuyerMatches() {
         </div>
 
       </div>
+
+      {/* ── Raise dispute modal ── */}
+      {disputing && (
+        <DisputeModal
+          logId={disputing.log_id}
+          context={`${disputing.category} · ${parseFloat(disputing.weight_kg).toFixed(2)} kg with ${disputing.buyer_name || 'buyer'}`}
+          onClose={() => setDisputing(null)}
+          onDisputed={handleDisputed}
+        />
+      )}
     </>
   );
 }

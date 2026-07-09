@@ -204,6 +204,8 @@ exports.getMyTransactions = async (req, res, next) => {
               t.mpesa_code       AS mpesa_receipt,
               t.payout_error,
               t.transaction_date AS created_at,
+              wl.log_id,
+              wl.status AS log_status,
               wl.category, wl.weight_kg,
               u.name AS collector_name
        FROM transactions t

@@ -7,6 +7,7 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import MapPicker from '../../components/MapPicker';
 import NotificationBell from '../../components/NotificationBell';
+import DisputeModal from '../../components/DisputeModal';
 
 const C = {
   primary: '#1F6F4A',
@@ -523,6 +524,30 @@ const css = `
     white-space: nowrap;
   }
 
+  /* ── Raise dispute button (transactions) ── */
+  .bd-dispute-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 9px 0;
+    border-radius: 8px;
+    border: 1px solid ${C.accent};
+    background: transparent;
+    color: #B07818;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  .bd-dispute-btn:hover { background: #FBF3E4; }
+  .bd-disputed-note {
+    margin: 12px 0 0;
+    font-size: 13px;
+    color: ${C.danger};
+    font-weight: 600;
+    text-align: center;
+  }
+
   /* ════════════════════════════════
      Responsive breakpoints
   ════════════════════════════════ */
@@ -564,11 +589,28 @@ const css = `
   }
 `;
 
+// "2 mins ago"-style label from a timestamp; falls back to a date past 7 days
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  const mins = Math.floor(seconds / 60);
+  if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return new Date(dateStr).toLocaleDateString('en-KE', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+}
+
 export default function BuyerDashboard() {
   const [tab, setTab] = useState('offers');
   const [offers, setOffers] = useState([]);
   const [matches, setMatches] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [disputing, setDisputing] = useState(null); // transaction being disputed
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -682,6 +724,13 @@ export default function BuyerDashboard() {
       });
     }
   }
+
+  const handleDisputed = (updated) => {
+    setTransactions(prev => prev.map(t =>
+      t.log_id === updated.log_id ? { ...t, log_status: updated.status } : t
+    ));
+    setDisputing(null);
+  };
 
   const NAV_TABS = [
     { key: 'offers',       label: 'My Offers',    count: offers.length },
@@ -921,6 +970,7 @@ export default function BuyerDashboard() {
                             <div className="bd-card-meta">
                               <span>📞 {m.collector_phone}</span>
                               <span>💰 KES {m.price_per_kg}/kg</span>
+                              <span>🕒 Logged {timeAgo(m.logged_at)}</span>
                             </div>
                             <button
                               className="bd-btn-confirm"
@@ -1060,6 +1110,23 @@ export default function BuyerDashboard() {
                                 ✓ Collector paid out successfully.
                               </p>
                             )}
+
+                            {/* Disputable only once payment is in escrow (log
+                                'confirmed') — an unpaid match should be
+                                declined, not disputed */}
+                            {t.log_status === 'confirmed' && (
+                              <button
+                                className="bd-dispute-btn"
+                                onClick={() => setDisputing(t)}
+                              >
+                                ⚠ Raise Dispute
+                              </button>
+                            )}
+                            {t.log_status === 'disputed' && (
+                              <p className="bd-disputed-note">
+                                ⚠ Under dispute — an admin will review it.
+                              </p>
+                            )}
                           </div>
                         ))
                       )}
@@ -1072,6 +1139,16 @@ export default function BuyerDashboard() {
         </div>
 
       </div>
+
+      {/* ── Raise dispute modal ── */}
+      {disputing && (
+        <DisputeModal
+          logId={disputing.log_id}
+          context={`${disputing.category} · ${disputing.weight_kg}kg from ${disputing.collector_name} — KES ${disputing.amount}`}
+          onClose={() => setDisputing(null)}
+          onDisputed={handleDisputed}
+        />
+      )}
     </>
   );
 }
