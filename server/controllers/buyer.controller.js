@@ -83,12 +83,26 @@ exports.createOffer = async (req, res, next) => {
   }
 };
 
+// Helper: waste_logs currently matched to this offer that haven't reached a
+// terminal state yet. Used to guard edits/deletes that would otherwise
+// silently orphan those logs via the matched_offer_id ON DELETE SET NULL FK.
+async function getActiveMatches(offerId) {
+  const result = await pool.query(
+    `SELECT log_id FROM waste_logs
+     WHERE matched_offer_id = $1 AND status IN ('matched', 'confirmed', 'disputed')`,
+    [offerId]
+  );
+  return result.rows;
+}
+
 // PATCH /api/buyer/offers/:offerId — update price/status/etc, ownership enforced
 exports.updateOffer = async (req, res, next) => {
   try {
     const buyerId = await getBuyerId(req.user.user_id);
     const { offerId } = req.params;
     const { price_per_kg, min_quantity_kg, status } = req.body;
+
+    const activeMatches = await getActiveMatches(offerId);
 
     const result = await pool.query(
       `UPDATE buyer_offers
@@ -103,7 +117,13 @@ exports.updateOffer = async (req, res, next) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Offer not found or not owned by this buyer' });
     }
-    res.json({ offer: result.rows[0] });
+
+    const priceChanging = price_per_kg != null || min_quantity_kg != null;
+    const response = { offer: result.rows[0] };
+    if (priceChanging && activeMatches.length > 0) {
+      response.warning = `This offer has ${activeMatches.length} match(es) in progress; the price change will not affect already-matched logs.`;
+    }
+    res.json(response);
   } catch (err) {
     next(err);
   }
@@ -115,14 +135,22 @@ exports.deleteOffer = async (req, res, next) => {
     const buyerId = await getBuyerId(req.user.user_id);
     const { offerId } = req.params;
 
-    const result = await pool.query(
-      'DELETE FROM buyer_offers WHERE offer_id = $1 AND buyer_id = $2 RETURNING offer_id',
+    const ownedOffer = await pool.query(
+      'SELECT offer_id FROM buyer_offers WHERE offer_id = $1 AND buyer_id = $2',
       [offerId, buyerId]
     );
-
-    if (result.rows.length === 0) {
+    if (ownedOffer.rows.length === 0) {
       return res.status(404).json({ error: 'Offer not found or not owned by this buyer' });
     }
+
+    const activeMatches = await getActiveMatches(offerId);
+    if (activeMatches.length > 0) {
+      return res.status(409).json({
+        error: `This offer has ${activeMatches.length} active match(es) in progress and can't be deleted until they're resolved. Deactivate it instead to stop new matches.`,
+      });
+    }
+
+    await pool.query('DELETE FROM buyer_offers WHERE offer_id = $1 AND buyer_id = $2', [offerId, buyerId]);
     res.status(204).send();
   } catch (err) {
     next(err);

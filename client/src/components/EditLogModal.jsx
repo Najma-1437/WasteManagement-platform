@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../api/axiosClient';
 import MapPicker from './MapPicker';
 
@@ -94,6 +95,7 @@ const css = `
  * The server rejects the edit (409) once a buyer has claimed the log.
  */
 export default function EditLogModal({ log, onClose, onSaved }) {
+  const { t } = useTranslation();
   const [category, setCategory] = useState(log.category);
   const [weight, setWeight]     = useState(String(parseFloat(log.weight_kg)));
   const [lat, setLat]           = useState(log.latitude);
@@ -106,11 +108,11 @@ export default function EditLogModal({ log, onClose, onSaved }) {
 
   const handleSave = async () => {
     if (!weightValid) {
-      setError('Enter a valid weight greater than 0.');
+      setError(t('editLogModal.weightError'));
       return;
     }
     if (!hasLocation) {
-      setError('Pick a location before saving.');
+      setError(t('editLogModal.locationError'));
       return;
     }
     setError('');
@@ -124,7 +126,7 @@ export default function EditLogModal({ log, onClose, onSaved }) {
       });
       onSaved(res.data.log);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to save changes. Try again.');
+      setError(err.response?.data?.error || t('editLogModal.saveFailed'));
       setSaving(false);
     }
   };
@@ -135,14 +137,14 @@ export default function EditLogModal({ log, onClose, onSaved }) {
       <div className="elm-overlay" onClick={onClose}>
         <div className="elm-modal" onClick={e => e.stopPropagation()}>
           <div className="elm-header">
-            <p className="elm-title">Edit waste log</p>
+            <p className="elm-title">{t('editLogModal.title')}</p>
             <button className="elm-close" onClick={onClose}>✕</button>
           </div>
 
           {error && <div className="elm-error">{error}</div>}
 
           <div className="elm-section">
-            <span className="elm-label">Waste category</span>
+            <span className="elm-label">{t('editLogModal.categoryLabel')}</span>
             <div className="elm-cat-row">
               {CATEGORIES.map(cat => (
                 <button
@@ -152,14 +154,14 @@ export default function EditLogModal({ log, onClose, onSaved }) {
                   onClick={() => setCategory(cat.key)}
                 >
                   <span className="elm-cat-icon">{cat.icon}</span>
-                  <span className="elm-cat-label">{cat.label}</span>
+                  <span className="elm-cat-label">{t(`categories.${cat.key}`)}</span>
                 </button>
               ))}
             </div>
           </div>
 
           <div className="elm-section">
-            <span className="elm-label">Estimated weight (kg)</span>
+            <span className="elm-label">{t('editLogModal.weightLabel')}</span>
             <input
               className="elm-weight-input"
               type="number"
@@ -171,7 +173,7 @@ export default function EditLogModal({ log, onClose, onSaved }) {
           </div>
 
           <div className="elm-section">
-            <span className="elm-label">Location</span>
+            <span className="elm-label">{t('editLogModal.locationLabel')}</span>
             <MapPicker
               initial={{ lat: log.latitude, lng: log.longitude }}
               onSelect={({ lat: newLat, lng: newLng }) => { setLat(newLat); setLng(newLng); }}
@@ -180,10 +182,10 @@ export default function EditLogModal({ log, onClose, onSaved }) {
 
           <div className="elm-actions">
             <button className="elm-btn elm-btn-cancel" onClick={onClose} disabled={saving}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button className="elm-btn elm-btn-save" onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving…' : 'Save changes'}
+              {saving ? t('editLogModal.saving') : t('editLogModal.saveButton')}
             </button>
           </div>
         </div>

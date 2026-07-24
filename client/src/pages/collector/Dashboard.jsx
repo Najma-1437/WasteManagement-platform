@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../store/authStore';
+import { useTranslation } from 'react-i18next';
 import api from '../../api/axiosClient';
-import NotificationBell from '../../components/NotificationBell';
 import EditLogModal from '../../components/EditLogModal';
 import { getQueuedLogs } from '../../utils/offlineQueue';
+import { AppLayout, ConfirmDialog, useToast } from '../../components/shared';
 
 const POINTS_PER_KES = 10; // 10 points = KES 1 airtime
 
@@ -28,129 +28,6 @@ const C = {
 
 const css = `
   *, *::before, *::after { box-sizing: border-box; }
-
-  .cd-root {
-    min-height: 100vh;
-    background: ${C.bg};
-    font-family: Inter, system-ui, -apple-system, sans-serif;
-    color: ${C.text};
-    display: flex;
-  }
-
-  /* ── Sidebar ── */
-  .cd-sidebar {
-    width: 240px;
-    flex-shrink: 0;
-    background: ${C.primary};
-    display: flex;
-    flex-direction: column;
-    position: fixed;
-    top: 0; left: 0; bottom: 0;
-    z-index: 200;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.12);
-  }
-
-  .cd-sidebar-header {
-    padding: 24px 20px 20px;
-    border-bottom: 1px solid rgba(255,255,255,0.12);
-  }
-  .cd-logo-mark {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 15px;
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 12px;
-  }
-  .cd-logo-icon {
-    width: 34px;
-    height: 34px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    flex-shrink: 0;
-  }
-  .cd-greeting {
-    font-size: 13px;
-    color: rgba(255,255,255,0.6);
-    font-weight: 400;
-    line-height: 1.4;
-  }
-  .cd-greeting strong {
-    color: rgba(255,255,255,0.92);
-    font-weight: 600;
-  }
-
-  .cd-nav {
-    flex: 1;
-    padding: 16px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    overflow-y: auto;
-  }
-
-  .cd-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 11px 14px;
-    border-radius: 10px;
-    border: none;
-    background: transparent;
-    color: rgba(255,255,255,0.65);
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    text-align: left;
-    width: 100%;
-    transition: background 0.15s, color 0.15s;
-    font-family: inherit;
-  }
-  .cd-nav-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
-  .cd-nav-item.active { background: rgba(255,255,255,0.18); color: #fff; }
-  .cd-nav-item.soon { opacity: 0.55; cursor: default; }
-  .cd-nav-item.soon:hover { background: transparent; color: rgba(255,255,255,0.65); }
-  .cd-nav-icon {
-    font-size: 16px;
-    flex-shrink: 0;
-    width: 20px;
-    text-align: center;
-  }
-  .cd-soon-badge {
-    margin-left: auto;
-    font-size: 10px;
-    font-weight: 700;
-    color: rgba(255,255,255,0.45);
-    background: rgba(255,255,255,0.1);
-    border-radius: 8px;
-    padding: 2px 7px;
-    letter-spacing: 0.3px;
-  }
-
-  .cd-sidebar-footer {
-    padding: 12px;
-    border-top: 1px solid rgba(255,255,255,0.12);
-  }
-  .cd-nav-logout { color: rgba(255,255,255,0.6); }
-  .cd-nav-logout:hover { background: rgba(255,255,255,0.08); color: #fff; }
-
-  /* ── Main content ── */
-  .cd-content {
-    margin-left: 240px;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .cd-main {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 36px 32px 56px;
-  }
 
   .cd-page-title {
     font-size: 24px;
@@ -430,48 +307,6 @@ const css = `
   }
   .cd-delete-btn:hover { background: #FDECEA; }
 
-  /* ── Mobile top bar ── */
-  .cd-mobile-top { display: none; }
-  .cd-mobile-header {
-    background: ${C.primary};
-    padding: 14px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .cd-mobile-logo {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 15px;
-    font-weight: 700;
-    color: #fff;
-  }
-  .cd-mobile-logo-icon {
-    width: 30px; height: 30px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
-  }
-  .cd-mobile-btn {
-    padding: 6px 14px;
-    border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.35);
-    background: transparent;
-    color: rgba(255,255,255,0.85);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.15s;
-  }
-  .cd-mobile-btn:hover { background: rgba(255,255,255,0.12); }
-
   /* ── Pending-sync notice (sidebar) ── */
   .cd-sync-notice {
     display: flex;
@@ -499,10 +334,6 @@ const css = `
   }
 
   @media (max-width: 767px) {
-    .cd-sidebar    { display: none; }
-    .cd-content    { margin-left: 0; }
-    .cd-mobile-top { display: block; }
-    .cd-main       { padding: 20px 16px 48px; }
     .cd-stats      { grid-template-columns: 1fr 1fr; gap: 12px; }
     .cd-stat       { padding: 16px 16px; }
     .cd-stat-value { font-size: 22px; }
@@ -531,7 +362,7 @@ function StatusPill({ status }) {
 }
 
 export default function CollectorDashboard() {
-  const { user, logout } = useAuthStore();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const [logs, setLogs]       = useState([]);
@@ -543,6 +374,9 @@ export default function CollectorDashboard() {
     open: false, input: '', submitting: false, result: null, error: '',
   });
   const [editingLog, setEditingLog] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const { show } = useToast();
 
   useEffect(() => {
     Promise.all([
@@ -571,13 +405,18 @@ export default function CollectorDashboard() {
     return () => window.removeEventListener('offlinequeue:change', refresh);
   }, []);
 
-  const handleDelete = async (logId) => {
-    if (!confirm('Delete this log? This cannot be undone.')) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await api.delete(`/waste-logs/${logId}`);
-      setLogs(prev => prev.filter(l => l.log_id !== logId));
+      await api.delete(`/waste-logs/${deleteTarget.log_id}`);
+      setLogs(prev => prev.filter(l => l.log_id !== deleteTarget.log_id));
+      setDeleteTarget(null);
+      show(t('toast.logDeleted'), { tone: 'success' });
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to delete log.');
+      show(err.response?.data?.error || t('toast.logDeleteFailed'), { tone: 'error' });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -585,11 +424,6 @@ export default function CollectorDashboard() {
     setLogs(prev => prev.map(l => (l.log_id === updated.log_id ? { ...l, ...updated } : l)));
     setEditingLog(null);
   };
-
-  function handleLogout() {
-    navigate('/', { replace: true });
-    logout();
-  }
 
   async function handleRedeem(e) {
     e.preventDefault();
@@ -604,7 +438,7 @@ export default function CollectorDashboard() {
     } catch (err) {
       setRedeem(r => ({
         ...r, submitting: false,
-        error: err.response?.data?.error || 'Redemption failed.',
+        error: err.response?.data?.error || t('collectorDashboard.redeemFailed'),
       }));
     }
   }
@@ -623,105 +457,24 @@ export default function CollectorDashboard() {
     ? (redeemPts / POINTS_PER_KES).toFixed(2)
     : null;
 
+  const syncNotice = pendingCount > 0 && (
+    <div className="cd-sync-notice" title={t('collectorDashboard.syncTooltip')}>
+      <span className="cd-sync-dot" />
+      {t('collectorDashboard.syncNotice', { count: pendingCount })}
+    </div>
+  );
+
   return (
     <>
       <style>{css}</style>
-      <div className="cd-root">
-
-        {/* ── Left sidebar (desktop) ── */}
-        <aside className="cd-sidebar">
-          <div className="cd-sidebar-header">
-            <div className="cd-logo-mark">
-              <div className="cd-logo-icon">♻</div>
-              WasteManagement
-            </div>
-            <p className="cd-greeting">
-              Hello, <strong>{user?.name ?? 'Collector'}</strong>
-            </p>
-          </div>
-
-          <nav className="cd-nav">
-            <button className="cd-nav-item active">
-              <span className="cd-nav-icon">📊</span>
-              Dashboard
-            </button>
-            <button
-              className="cd-nav-item"
-              onClick={() => navigate('/collector/log-new')}
-            >
-              <span className="cd-nav-icon">➕</span>
-              Log Waste
-            </button>
-            <NotificationBell />
-            <button
-              className="cd-nav-item"
-              onClick={() => navigate('/collector/leaderboard')}
-            >
-              <span className="cd-nav-icon">🏆</span>
-              Leaderboard
-            </button>
-            <button
-              className="cd-nav-item"
-              onClick={() => navigate('/collector/earnings')}
-            >
-              <span className="cd-nav-icon">💰</span>
-              My Earnings
-            </button>
-            <button
-              className="cd-nav-item"
-              onClick={() => navigate('/collector/matches')}
-            >
-              <span className="cd-nav-icon">🤝</span>
-              Buyer Matches
-            </button>
-          </nav>
-
-          {pendingCount > 0 && (
-            <div className="cd-sync-notice" title="These logs are saved on this device and will sync automatically when online.">
-              <span className="cd-sync-dot" />
-              {pendingCount} log{pendingCount !== 1 ? 's' : ''} pending sync
-            </div>
-          )}
-
-          <div className="cd-sidebar-footer">
-            <button className="cd-nav-item cd-nav-logout" onClick={handleLogout}>
-              <span className="cd-nav-icon">🚪</span>
-              Logout
-            </button>
-          </div>
-        </aside>
-
-        {/* ── Mobile top bar (hidden on desktop) ── */}
-        <div className="cd-mobile-top">
-          <div className="cd-mobile-header">
-            <div className="cd-mobile-logo">
-              <div className="cd-mobile-logo-icon">♻</div>
-              WasteManagement
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                className="cd-mobile-btn"
-                onClick={() => navigate('/collector/log-new')}
-              >
-                + Log
-              </button>
-              <button className="cd-mobile-btn" onClick={handleLogout}>
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Main content ── */}
-        <div className="cd-content">
-          <main className="cd-main">
-            <h1 className="cd-page-title">Dashboard</h1>
+      <AppLayout active="dashboard" extraSidebarContent={syncNotice}>
+            <h1 className="cd-page-title">{t('collectorDashboard.pageTitle')}</h1>
 
             {/* ── Stat cards ── */}
             <div className="cd-stats">
               <div className="cd-stat">
                 <div className="cd-stat-icon">💰</div>
-                <div className="cd-stat-label">Earnings this month</div>
+                <div className="cd-stat-label">{t('collectorDashboard.earningsThisMonth')}</div>
                 <div className="cd-stat-value">
                   {loading || earningsThisMonth === null
                     ? 'KES —'
@@ -732,25 +485,25 @@ export default function CollectorDashboard() {
                     className="cd-view-all-btn"
                     onClick={() => navigate('/collector/earnings')}
                   >
-                    View earnings →
+                    {t('collectorDashboard.viewEarnings')}
                   </button>
                 </div>
               </div>
 
               <div className="cd-stat">
                 <div className="cd-stat-icon">🤝</div>
-                <div className="cd-stat-label">Active buyer matches</div>
+                <div className="cd-stat-label">{t('collectorDashboard.activeMatches')}</div>
                 <div className="cd-stat-value">
                   {loading ? '—' : matchedCount}
                 </div>
                 <div className="cd-stat-sub">
-                  {loading ? '' : matchedCount === 1 ? '1 log matched' : `${matchedCount} logs matched`}
+                  {loading ? '' : t('collectorDashboard.logsMatched', { count: matchedCount })}
                 </div>
               </div>
 
               <div className="cd-stat">
                 <div className="cd-stat-icon">⭐</div>
-                <div className="cd-stat-label">Gamification points</div>
+                <div className="cd-stat-label">{t('collectorDashboard.points')}</div>
                 <div className="cd-stat-value">
                   {loading || gamification.points === null
                     ? '—'
@@ -768,7 +521,7 @@ export default function CollectorDashboard() {
                     className="cd-redeem-btn"
                     onClick={() => setRedeem(r => ({ ...r, open: true, result: null, error: '' }))}
                   >
-                    Redeem for airtime
+                    {t('collectorDashboard.redeemButton')}
                   </button>
                 )}
               </div>
@@ -777,11 +530,11 @@ export default function CollectorDashboard() {
             {/* ── Recent waste logs table ── */}
             <div className="cd-table-card">
               <div className="cd-table-header">
-                <h2 className="cd-table-title">Recent Waste Logs</h2>
+                <h2 className="cd-table-title">{t('collectorDashboard.recentLogsTitle')}</h2>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   {!loading && (
                     <span className="cd-table-count">
-                      {logs.length} total log{logs.length !== 1 ? 's' : ''}
+                      {t('collectorDashboard.logCountTotal', { count: logs.length })}
                     </span>
                   )}
                   {logs.length > 10 && (
@@ -789,7 +542,7 @@ export default function CollectorDashboard() {
                       className="cd-view-all-btn"
                       onClick={() => navigate('/collector/logs')}
                     >
-                      View All →
+                      {t('collectorDashboard.viewAll')}
                     </button>
                   )}
                 </div>
@@ -798,12 +551,12 @@ export default function CollectorDashboard() {
               {loading ? (
                 <div className="cd-empty">
                   <div className="cd-empty-icon">⏳</div>
-                  <p>Loading…</p>
+                  <p>{t('common.loading')}</p>
                 </div>
               ) : recentLogs.length === 0 ? (
                 <div className="cd-empty">
                   <div className="cd-empty-icon">📋</div>
-                  <p style={{ fontWeight: 600 }}>No waste logs yet.</p>
+                  <p style={{ fontWeight: 600 }}>{t('collectorDashboard.noLogsYet')}</p>
                   <p>
                     <button
                       onClick={() => navigate('/collector/log-new')}
@@ -813,7 +566,7 @@ export default function CollectorDashboard() {
                         fontFamily: 'inherit', padding: 0,
                       }}
                     >
-                      Submit your first log →
+                      {t('collectorDashboard.submitFirstLog')}
                     </button>
                   </p>
                 </div>
@@ -822,11 +575,11 @@ export default function CollectorDashboard() {
                   <table className="cd-table">
                     <thead>
                       <tr>
-                        <th>Type</th>
-                        <th>Weight</th>
-                        <th>Location</th>
-                        <th>Status</th>
-                        <th>Date</th>
+                        <th>{t('collectorDashboard.colType')}</th>
+                        <th>{t('collectorDashboard.colWeight')}</th>
+                        <th>{t('collectorDashboard.colLocation')}</th>
+                        <th>{t('collectorDashboard.colStatus')}</th>
+                        <th>{t('collectorDashboard.colDate')}</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -856,14 +609,14 @@ export default function CollectorDashboard() {
                                 <button
                                   className="cd-edit-btn"
                                   onClick={() => setEditingLog(log)}
-                                  title="Edit log"
+                                  title={t('allLogs.editLog')}
                                 >
                                   ✎
                                 </button>
                                 <button
                                   className="cd-delete-btn"
-                                  onClick={() => handleDelete(log.log_id)}
-                                  title="Delete log"
+                                  onClick={() => setDeleteTarget(log)}
+                                  title={t('allLogs.deleteLog')}
                                 >
                                   🗑
                                 </button>
@@ -877,11 +630,7 @@ export default function CollectorDashboard() {
                 </div>
               )}
             </div>
-
-          </main>
-        </div>
-
-      </div>
+      </AppLayout>
 
       {/* ── Edit log modal ── */}
       {editingLog && (
@@ -892,12 +641,25 @@ export default function CollectorDashboard() {
         />
       )}
 
+      {/* ── Delete confirmation ── */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        tone="warning"
+        title={t('confirmDialog.deleteLogTitle')}
+        message={t('confirmDialog.deleteLogMessage')}
+        confirmLabel={t('confirmDialog.deleteLogConfirm')}
+        cancelLabel={t('common.cancel')}
+        confirming={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
       {/* ── Redeem modal ── */}
       {redeem.open && (
         <div className="cd-overlay" onClick={closeRedeem}>
           <div className="cd-modal" onClick={e => e.stopPropagation()}>
             <div className="cd-modal-header">
-              <p className="cd-modal-title">Redeem for Airtime</p>
+              <p className="cd-modal-title">{t('collectorDashboard.redeemModalTitle')}</p>
               <button className="cd-modal-close" onClick={closeRedeem}>✕</button>
             </div>
 
@@ -905,23 +667,23 @@ export default function CollectorDashboard() {
               <div className="cd-modal-success">
                 <div style={{ fontSize: 36, marginBottom: 10 }}>✅</div>
                 <p style={{ fontWeight: 700, margin: '0 0 6px', fontSize: 15 }}>
-                  Redemption requested
+                  {t('collectorDashboard.redeemSuccessTitle')}
                 </p>
                 <p style={{ margin: '0 0 4px', fontSize: 14 }}>
                   {redeem.result.points_spent} pts → KES {redeem.result.airtime_value_kes}
                 </p>
                 <p style={{ fontSize: 12, color: C.muted, margin: '0 0 20px', lineHeight: 1.5 }}>
-                  Status: Pending processing — airtime is queued and usually arrives within minutes.
+                  {t('collectorDashboard.redeemStatusPending')}
                 </p>
-                <button className="cd-modal-submit" onClick={closeRedeem}>Done</button>
+                <button className="cd-modal-submit" onClick={closeRedeem}>{t('collectorDashboard.redeemDone')}</button>
               </div>
             ) : (
               <form onSubmit={handleRedeem}>
                 <p style={{ fontSize: 13, color: C.muted, margin: '0 0 14px', lineHeight: 1.5 }}>
-                  You have <strong style={{ color: C.text }}>
-                    {gamification.points?.toLocaleString()} points
-                  </strong> available.
-                  Rate: {POINTS_PER_KES} pts = KES 1. Min redemption: 100 pts.
+                  {t('collectorDashboard.redeemYouHave')} <strong style={{ color: C.text }}>
+                    {gamification.points?.toLocaleString()} pts
+                  </strong> {t('collectorDashboard.redeemPointsAvailable')}{' '}
+                  {t('collectorDashboard.redeemRateInfo', { rate: POINTS_PER_KES })}
                 </p>
                 <input
                   className="cd-modal-input"
@@ -929,13 +691,13 @@ export default function CollectorDashboard() {
                   min="100"
                   max={gamification.points ?? 0}
                   step="1"
-                  placeholder="Points to redeem (min 100)"
+                  placeholder={t('collectorDashboard.redeemInputPlaceholder')}
                   value={redeem.input}
                   onChange={e => setRedeem(r => ({ ...r, input: e.target.value, error: '' }))}
                 />
                 {redeemKes && (
                   <div className="cd-redeem-preview">
-                    {redeemPts} pts → KES {redeemKes} airtime
+                    {t('collectorDashboard.redeemPreview', { pts: redeemPts, kes: redeemKes })}
                   </div>
                 )}
                 {redeem.error && (
@@ -946,10 +708,10 @@ export default function CollectorDashboard() {
                   className="cd-modal-submit"
                   disabled={redeem.submitting || !redeemPts || redeemPts < 100}
                 >
-                  {redeem.submitting ? 'Requesting…' : 'Request Airtime'}
+                  {redeem.submitting ? t('collectorDashboard.redeemSubmitting') : t('collectorDashboard.redeemSubmitButton')}
                 </button>
                 <p style={{ fontSize: 11, color: C.muted, margin: '10px 0 0', textAlign: 'center' }}>
-                  Airtime redemption is queued for processing, not instant.
+                  {t('collectorDashboard.redeemFootnote')}
                 </p>
               </form>
             )}

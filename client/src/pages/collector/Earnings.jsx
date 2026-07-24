@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../store/authStore';
+import { useTranslation } from 'react-i18next';
 import api from '../../api/axiosClient';
-import NotificationBell from '../../components/NotificationBell';
+import { AppLayout } from '../../components/shared';
 
 const C = {
   primary:     '#1e6b3c',
@@ -17,103 +16,6 @@ const C = {
 
 const css = `
   *, *::before, *::after { box-sizing: border-box; }
-
-  .cd-root {
-    min-height: 100vh;
-    background: ${C.bg};
-    font-family: Inter, system-ui, -apple-system, sans-serif;
-    color: ${C.text};
-    display: flex;
-  }
-
-  /* ── Sidebar (same pattern as Dashboard) ── */
-  .cd-sidebar {
-    width: 240px;
-    flex-shrink: 0;
-    background: ${C.primary};
-    display: flex;
-    flex-direction: column;
-    position: fixed;
-    top: 0; left: 0; bottom: 0;
-    z-index: 200;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.12);
-  }
-  .cd-sidebar-header {
-    padding: 24px 20px 20px;
-    border-bottom: 1px solid rgba(255,255,255,0.12);
-  }
-  .cd-logo-mark {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 15px;
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 12px;
-  }
-  .cd-logo-icon {
-    width: 34px; height: 34px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 9px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 16px; flex-shrink: 0;
-  }
-  .cd-greeting {
-    font-size: 13px;
-    color: rgba(255,255,255,0.6);
-    font-weight: 400;
-    line-height: 1.4;
-  }
-  .cd-greeting strong { color: rgba(255,255,255,0.92); font-weight: 600; }
-
-  .cd-nav {
-    flex: 1;
-    padding: 16px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    overflow-y: auto;
-  }
-  .cd-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 11px 14px;
-    border-radius: 10px;
-    border: none;
-    background: transparent;
-    color: rgba(255,255,255,0.65);
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    text-align: left;
-    width: 100%;
-    transition: background 0.15s, color 0.15s;
-    font-family: inherit;
-  }
-  .cd-nav-item:hover  { background: rgba(255,255,255,0.1); color: #fff; }
-  .cd-nav-item.active { background: rgba(255,255,255,0.18); color: #fff; }
-  .cd-nav-item.soon   { opacity: 0.55; cursor: default; }
-  .cd-nav-item.soon:hover { background: transparent; color: rgba(255,255,255,0.65); }
-  .cd-nav-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
-  .cd-soon-badge {
-    margin-left: auto;
-    font-size: 10px; font-weight: 700;
-    color: rgba(255,255,255,0.45);
-    background: rgba(255,255,255,0.1);
-    border-radius: 8px; padding: 2px 7px;
-    letter-spacing: 0.3px;
-  }
-  .cd-sidebar-footer {
-    padding: 12px;
-    border-top: 1px solid rgba(255,255,255,0.12);
-  }
-  .cd-nav-logout { color: rgba(255,255,255,0.6); }
-  .cd-nav-logout:hover { background: rgba(255,255,255,0.08); color: #fff; }
-
-  /* ── Main content ── */
-  .cd-content { margin-left: 240px; flex: 1; min-width: 0; }
-  .cd-main { max-width: 1100px; margin: 0 auto; padding: 36px 32px 56px; }
 
   .cd-page-title {
     font-size: 24px;
@@ -221,53 +123,7 @@ const css = `
   .cd-pill-payout_failed    { background: #FDECEA; color: #B3261E; }
   .cd-pill-failed           { background: #FDECEA; color: #B3261E; }
 
-  /* ── Mobile top bar ── */
-  .cd-mobile-top { display: none; }
-  .cd-mobile-header {
-    background: ${C.primary};
-    padding: 14px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .cd-mobile-logo {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 15px;
-    font-weight: 700;
-    color: #fff;
-  }
-  .cd-mobile-logo-icon {
-    width: 30px; height: 30px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
-  }
-  .cd-mobile-btn {
-    padding: 6px 14px;
-    border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.35);
-    background: transparent;
-    color: rgba(255,255,255,0.85);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.15s;
-  }
-  .cd-mobile-btn:hover { background: rgba(255,255,255,0.12); }
-
   @media (max-width: 767px) {
-    .cd-sidebar    { display: none; }
-    .cd-content    { margin-left: 0; }
-    .cd-mobile-top { display: block; }
-    .cd-main       { padding: 20px 16px 48px; }
     .cd-stats      { grid-template-columns: 1fr 1fr; gap: 12px; }
     .cd-stat       { padding: 16px 16px; }
     .cd-stat-value { font-size: 22px; }
@@ -295,8 +151,7 @@ function StatusPill({ status }) {
 }
 
 export default function Earnings() {
-  const { user, logout } = useAuthStore();
-  const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -309,82 +164,13 @@ export default function Earnings() {
       .finally(() => setLoading(false));
   }, []);
 
-  function handleLogout() {
-    navigate('/', { replace: true });
-    logout();
-  }
-
   const transactions = data?.transactions ?? [];
 
   return (
     <>
       <style>{css}</style>
-      <div className="cd-root">
-
-        {/* ── Left sidebar (desktop) ── */}
-        <aside className="cd-sidebar">
-          <div className="cd-sidebar-header">
-            <div className="cd-logo-mark">
-              <div className="cd-logo-icon">♻</div>
-              WasteManagement
-            </div>
-            <p className="cd-greeting">
-              Hello, <strong>{user?.name ?? 'Collector'}</strong>
-            </p>
-          </div>
-
-          <nav className="cd-nav">
-            <button className="cd-nav-item" onClick={() => navigate('/collector')}>
-              <span className="cd-nav-icon">📊</span>
-              Dashboard
-            </button>
-            <button className="cd-nav-item" onClick={() => navigate('/collector/log-new')}>
-              <span className="cd-nav-icon">➕</span>
-              Log Waste
-            </button>
-            <NotificationBell />
-            <button className="cd-nav-item" onClick={() => navigate('/collector/leaderboard')}>
-              <span className="cd-nav-icon">🏆</span>
-              Leaderboard
-            </button>
-            <button className="cd-nav-item active">
-              <span className="cd-nav-icon">💰</span>
-              My Earnings
-            </button>
-            <button
-              className="cd-nav-item"
-              onClick={() => navigate('/collector/matches')}
-            >
-              <span className="cd-nav-icon">🤝</span>
-              Buyer Matches
-            </button>
-          </nav>
-
-          <div className="cd-sidebar-footer">
-            <button className="cd-nav-item cd-nav-logout" onClick={handleLogout}>
-              <span className="cd-nav-icon">🚪</span>
-              Logout
-            </button>
-          </div>
-        </aside>
-
-        {/* ── Mobile top bar ── */}
-        <div className="cd-mobile-top">
-          <div className="cd-mobile-header">
-            <div className="cd-mobile-logo">
-              <div className="cd-mobile-logo-icon">♻</div>
-              My Earnings
-            </div>
-            <button className="cd-mobile-btn" onClick={() => navigate('/collector')}>
-              ← Dashboard
-            </button>
-          </div>
-        </div>
-
-        {/* ── Main content ── */}
-        <div className="cd-content">
-          <main className="cd-main">
-            <h1 className="cd-page-title">My Earnings</h1>
+      <AppLayout active="earnings">
+            <h1 className="cd-page-title">{t('earnings.pageTitle')}</h1>
 
             {error && (
               <div className="cd-empty" style={{ color: C.danger, padding: '20px 0 32px' }}>
@@ -396,39 +182,39 @@ export default function Earnings() {
             <div className="cd-stats">
               <div className="cd-stat">
                 <div className="cd-stat-icon">💰</div>
-                <div className="cd-stat-label">Total Earned</div>
+                <div className="cd-stat-label">{t('earnings.totalEarned')}</div>
                 <div className="cd-stat-value">
                   {loading ? '—' : formatKes(data?.total_earned ?? 0)}
                 </div>
-                <div className="cd-stat-sub">Paid out to date</div>
+                <div className="cd-stat-sub">{t('earnings.totalEarnedSub')}</div>
               </div>
 
               <div className="cd-stat">
                 <div className="cd-stat-icon">📅</div>
-                <div className="cd-stat-label">This Month</div>
+                <div className="cd-stat-label">{t('earnings.thisMonth')}</div>
                 <div className="cd-stat-value">
                   {loading ? '—' : formatKes(data?.this_month_earned ?? 0)}
                 </div>
-                <div className="cd-stat-sub">Paid out this calendar month</div>
+                <div className="cd-stat-sub">{t('earnings.thisMonthSub')}</div>
               </div>
 
               <div className="cd-stat">
                 <div className="cd-stat-icon">⏳</div>
-                <div className="cd-stat-label">Pending</div>
+                <div className="cd-stat-label">{t('earnings.pending')}</div>
                 <div className="cd-stat-value">
                   {loading ? '—' : formatKes(data?.pending_amount ?? 0)}
                 </div>
-                <div className="cd-stat-sub">Awaiting payment or payout</div>
+                <div className="cd-stat-sub">{t('earnings.pendingSub')}</div>
               </div>
             </div>
 
             {/* ── Transaction history table ── */}
             <div className="cd-table-card">
               <div className="cd-table-header">
-                <h2 className="cd-table-title">Transaction History</h2>
+                <h2 className="cd-table-title">{t('earnings.transactionHistory')}</h2>
                 {!loading && (
                   <span className="cd-table-count">
-                    {transactions.length} transaction{transactions.length !== 1 ? 's' : ''}
+                    {t('earnings.transactionCount', { count: transactions.length })}
                   </span>
                 )}
               </div>
@@ -436,25 +222,25 @@ export default function Earnings() {
               {loading ? (
                 <div className="cd-empty">
                   <div className="cd-empty-icon">⏳</div>
-                  <p>Loading…</p>
+                  <p>{t('earnings.loading')}</p>
                 </div>
               ) : transactions.length === 0 ? (
                 <div className="cd-empty">
                   <div className="cd-empty-icon">💰</div>
-                  <p style={{ fontWeight: 600 }}>No transactions yet.</p>
-                  <p>Earnings appear here once a buyer matches and pays for one of your logs.</p>
+                  <p style={{ fontWeight: 600 }}>{t('earnings.noTransactionsYet')}</p>
+                  <p>{t('earnings.noTransactionsSub')}</p>
                 </div>
               ) : (
                 <div className="cd-table-wrap">
                   <table className="cd-table">
                     <thead>
                       <tr>
-                        <th>Date</th>
-                        <th>Category</th>
-                        <th>Weight</th>
-                        <th>Amount (KES)</th>
-                        <th>Status</th>
-                        <th>M-Pesa Code</th>
+                        <th>{t('earnings.colDate')}</th>
+                        <th>{t('earnings.colCategory')}</th>
+                        <th>{t('earnings.colWeight')}</th>
+                        <th>{t('earnings.colAmount')}</th>
+                        <th>{t('earnings.colStatus')}</th>
+                        <th>{t('earnings.colMpesaCode')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -480,10 +266,7 @@ export default function Earnings() {
               )}
             </div>
 
-          </main>
-        </div>
-
-      </div>
+      </AppLayout>
     </>
   );
 }

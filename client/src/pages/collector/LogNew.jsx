@@ -1,12 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../store/authStore';
+import { useTranslation } from 'react-i18next';
 import api from '../../api/axiosClient';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import NotificationBell from '../../components/NotificationBell';
 import { queueLog }        from '../../utils/offlineQueue';
 import { syncQueuedLogs }  from '../../utils/syncQueuedLogs';
+import { AppLayout, Tooltip } from '../../components/shared';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 const NAIROBI = [36.8219, -1.2921]; // [lng, lat]
@@ -24,114 +24,14 @@ const C = {
 
 // Reordered to match wireframe: Organic, Plastic, Metal, E-waste
 const CATEGORIES = [
-  { key: 'organic',  label: 'Organic',  icon: '🌿' },
-  { key: 'plastic',  label: 'Plastic',  icon: '♻'  },
-  { key: 'metal',    label: 'Metal',    icon: '⚙️' },
-  { key: 'e-waste',  label: 'E-waste',  icon: '💻' },
+  { key: 'organic',  icon: '🌿' },
+  { key: 'plastic',  icon: '♻'  },
+  { key: 'metal',    icon: '⚙️' },
+  { key: 'e-waste',  icon: '💻' },
 ];
 
 const css = `
   *, *::before, *::after { box-sizing: border-box; }
-
-  .cd-root {
-    min-height: 100vh;
-    background: ${C.bg};
-    font-family: Inter, system-ui, -apple-system, sans-serif;
-    color: ${C.text};
-    display: flex;
-  }
-
-  /* ── Sidebar (same pattern as Dashboard) ── */
-  .cd-sidebar {
-    width: 240px;
-    flex-shrink: 0;
-    background: ${C.primary};
-    display: flex;
-    flex-direction: column;
-    position: fixed;
-    top: 0; left: 0; bottom: 0;
-    z-index: 200;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.12);
-  }
-  .cd-sidebar-header {
-    padding: 24px 20px 20px;
-    border-bottom: 1px solid rgba(255,255,255,0.12);
-  }
-  .cd-logo-mark {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 15px;
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 12px;
-  }
-  .cd-logo-icon {
-    width: 34px; height: 34px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 9px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 16px; flex-shrink: 0;
-  }
-  .cd-greeting {
-    font-size: 13px;
-    color: rgba(255,255,255,0.6);
-    font-weight: 400;
-    line-height: 1.4;
-  }
-  .cd-greeting strong { color: rgba(255,255,255,0.92); font-weight: 600; }
-
-  .cd-nav {
-    flex: 1;
-    padding: 16px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    overflow-y: auto;
-  }
-  .cd-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 11px 14px;
-    border-radius: 10px;
-    border: none;
-    background: transparent;
-    color: rgba(255,255,255,0.65);
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    text-align: left;
-    width: 100%;
-    transition: background 0.15s, color 0.15s;
-    font-family: inherit;
-  }
-  .cd-nav-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
-  .cd-nav-item.active { background: rgba(255,255,255,0.18); color: #fff; }
-  .cd-nav-item.soon { opacity: 0.55; cursor: default; }
-  .cd-nav-item.soon:hover { background: transparent; color: rgba(255,255,255,0.65); }
-  .cd-nav-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
-  .cd-soon-badge {
-    margin-left: auto;
-    font-size: 10px; font-weight: 700;
-    color: rgba(255,255,255,0.45);
-    background: rgba(255,255,255,0.1);
-    border-radius: 8px; padding: 2px 7px;
-    letter-spacing: 0.3px;
-  }
-  .cd-sidebar-footer {
-    padding: 12px;
-    border-top: 1px solid rgba(255,255,255,0.12);
-  }
-  .cd-nav-logout { color: rgba(255,255,255,0.6); }
-  .cd-nav-logout:hover { background: rgba(255,255,255,0.08); color: #fff; }
-
-  /* ── Main content ── */
-  .cd-content {
-    margin-left: 240px;
-    flex: 1;
-    min-width: 0;
-  }
 
   /* ── Offline banner ── */
   .ln-offline-banner {
@@ -142,12 +42,6 @@ const css = `
     font-size: 13px;
     font-weight: 500;
     text-align: center;
-  }
-
-  .ln-main {
-    max-width: 700px;
-    margin: 0 auto;
-    padding: 36px 32px 56px;
   }
 
   /* ── Form card ── */
@@ -470,47 +364,72 @@ const css = `
   .ln-submit:hover:not(:disabled) { background: ${C.primaryDark}; }
   .ln-submit:disabled { opacity: 0.55; cursor: not-allowed; }
 
-  /* ── Mobile top bar ── */
-  .cd-mobile-top { display: none; }
-  .cd-mobile-header {
-    background: ${C.primary};
-    padding: 14px 16px;
-    display: flex; align-items: center; justify-content: space-between;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-    position: sticky; top: 0; z-index: 100;
-  }
-  .cd-mobile-logo {
+  /* ── Step wizard ── */
+  .ln-step-indicator {
     display: flex; align-items: center; gap: 8px;
-    font-size: 15px; font-weight: 700; color: #fff;
+    margin-bottom: 20px;
   }
-  .cd-mobile-logo-icon {
-    width: 30px; height: 30px;
-    background: rgba(255,255,255,0.2); border-radius: 8px;
-    display: flex; align-items: center; justify-content: center; font-size: 14px;
+  .ln-step-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: ${C.border}; flex-shrink: 0;
+    transition: background 0.15s, transform 0.15s;
   }
-  .cd-mobile-btn {
-    padding: 6px 14px; border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.35);
-    background: transparent; color: rgba(255,255,255,0.85);
-    font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+  .ln-step-dot.done   { background: ${C.primary}; }
+  .ln-step-dot.active { background: ${C.primary}; transform: scale(1.3); }
+  .ln-step-label {
+    font-size: 12px; font-weight: 700; color: ${C.muted};
+    text-transform: uppercase; letter-spacing: 0.4px;
+    margin-left: 4px;
+  }
+  .ln-step-title-row {
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 12px;
+  }
+  .ln-step-warn {
+    background: #FDECEA; color: ${C.danger};
+    border-radius: 10px; padding: 10px 14px;
+    font-size: 12px; margin-bottom: 12px;
+  }
+  .ln-wizard-nav {
+    display: flex; gap: 10px; margin-top: 4px;
+  }
+  .ln-back-btn {
+    flex: 0 0 auto; padding: 17px 20px; border-radius: 12px;
+    background: #fff; border: 1.5px solid ${C.border}; color: ${C.text};
+    font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
     transition: background 0.15s;
   }
-  .cd-mobile-btn:hover { background: rgba(255,255,255,0.12); }
+  .ln-back-btn:hover { background: #F3F4F6; }
+  .ln-next-btn {
+    flex: 1; padding: 17px; border: none; border-radius: 12px;
+    background: ${C.primary}; color: #fff; font-size: 15px; font-weight: 700;
+    cursor: pointer; font-family: inherit; letter-spacing: 0.2px;
+    transition: background 0.15s;
+  }
+  .ln-next-btn:hover { background: ${C.primaryDark}; }
+  .ln-wizard-nav .ln-submit { flex: 1; }
 
   @media (max-width: 767px) {
-    .cd-sidebar    { display: none; }
-    .cd-content    { margin-left: 0; }
-    .cd-mobile-top { display: block; }
-    .ln-main       { padding: 16px 16px 48px; }
     .ln-card       { padding: 20px 16px; }
     .ln-cat-row    { grid-template-columns: repeat(2, 1fr); }
     .ln-manual-row { grid-template-columns: 1fr; }
   }
 `;
 
+const STEPS = ['category', 'weight', 'location', 'notes'];
+const STEP_LABEL_KEYS = {
+  category: 'logNew.stepCategory',
+  weight:   'logNew.stepWeight',
+  location: 'logNew.stepLocation',
+  notes:    'logNew.stepNotes',
+};
+
 export default function LogNew() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+
+  const [step, setStep] = useState(0);
+  const [stepWarning, setStepWarning] = useState('');
 
   const [form, setForm] = useState({
     category: 'plastic',
@@ -536,9 +455,9 @@ export default function LogNew() {
   const mapRef          = useRef(null);
   const markerRef       = useRef(null);
 
-  const captureGPS = () => {
+  const captureGPS = useCallback(() => {
     if (!navigator.geolocation) {
-      setGpsError('Geolocation is not supported by your browser.');
+      setGpsError(t('logNew.gpsUnsupported'));
       setShowManual(true);
       return;
     }
@@ -556,13 +475,13 @@ export default function LogNew() {
         setSearchPicked('');
       },
       () => {
-        setGpsError('Could not get location. Enter coordinates manually.');
+        setGpsError(t('logNew.gpsFailed'));
         setGpsLoading(false);
         setShowManual(true);
       },
       { enableHighAccuracy: true, timeout: 10000 },
     );
-  };
+  }, [t]);
 
   // Place search (Nominatim / OpenStreetMap) — same flow as the buyer-side MapPicker
   const handleSearch = async () => {
@@ -574,9 +493,9 @@ export default function LogNew() {
       const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
       const data = await res.json();
       setSearchResults(data);
-      setSearchMsg(data.length === 0 ? 'No places found. Try a different name or enter coordinates manually.' : '');
+      setSearchMsg(data.length === 0 ? t('logNew.searchNoResults') : '');
     } catch {
-      setSearchMsg('Search failed. Check your connection or enter coordinates manually.');
+      setSearchMsg(t('logNew.searchFailed'));
     } finally {
       setSearching(false);
     }
@@ -612,7 +531,7 @@ export default function LogNew() {
       window.removeEventListener('online',  onOnline);
       window.removeEventListener('offline', onOffline);
     };
-  }, []);
+  }, [captureGPS]);
 
   // Initialise map with a draggable marker; dragend writes back to form state
   useEffect(() => {
@@ -667,11 +586,11 @@ export default function LogNew() {
 
   const handleSubmit = async () => {
     if (!weightValid) {
-      setError('Enter a valid weight before submitting.');
+      setError(t('logNew.errorNoWeight'));
       return;
     }
     if (!hasGPS) {
-      setError('Location is required — tap the location block or enter coordinates manually.');
+      setError(t('logNew.errorNoLocation'));
       return;
     }
     setError('');
@@ -691,7 +610,7 @@ export default function LogNew() {
         notes:     form.notes || undefined,
         client_id: clientId,
       });
-      setSuccess('Waste log submitted successfully!');
+      setSuccess(t('logNew.successSubmitted'));
       setTimeout(() => navigate('/collector'), 1500);
     } catch (err) {
       if (!err.response) {
@@ -706,112 +625,70 @@ export default function LogNew() {
           longitude: parseFloat(form.longitude),
           notes:     form.notes || null,
         }).catch(() => {});
-        setSuccess("Saved offline — will sync automatically when you're back online.");
+        setSuccess(t('logNew.successOffline'));
         setTimeout(() => navigate('/collector'), 2000);
       } else {
         // Server responded with an error (validation, auth, etc.) — not
         // a network failure, so don't queue.
-        setError(err.response?.data?.error || 'Failed to submit. Try again.');
+        setError(err.response?.data?.error || t('logNew.errorSubmitFailed'));
       }
     } finally {
       setSubmitting(false);
     }
   };
 
-  function handleLogout() {
-    navigate('/', { replace: true });
-    logout();
-  }
+  const goNext = () => {
+    if (step === 1 && !weightValid) {
+      setStepWarning(t('logNew.weightWarning'));
+      return;
+    }
+    if (step === 2 && !hasGPS) {
+      setStepWarning(t('logNew.locationWarning'));
+      return;
+    }
+    setStepWarning('');
+    setStep(s => Math.min(STEPS.length - 1, s + 1));
+  };
+
+  const goBack = () => {
+    setStepWarning('');
+    setStep(s => Math.max(0, s - 1));
+  };
 
   return (
     <>
       <style>{css}</style>
-      <div className="cd-root">
-
-        {/* ── Left sidebar ── */}
-        <aside className="cd-sidebar">
-          <div className="cd-sidebar-header">
-            <div className="cd-logo-mark">
-              <div className="cd-logo-icon">♻</div>
-              WasteManagement
-            </div>
-            <p className="cd-greeting">
-              Hello, <strong>{user?.name ?? 'Collector'}</strong>
-            </p>
-          </div>
-
-          <nav className="cd-nav">
-            <button className="cd-nav-item" onClick={() => navigate('/collector')}>
-              <span className="cd-nav-icon">📊</span>
-              Dashboard
-            </button>
-            <button className="cd-nav-item active">
-              <span className="cd-nav-icon">➕</span>
-              Log Waste
-            </button>
-            <NotificationBell />
-            <button
-              className="cd-nav-item"
-              onClick={() => navigate('/collector/leaderboard')}
-            >
-              <span className="cd-nav-icon">🏆</span>
-              Leaderboard
-            </button>
-            <button
-              className="cd-nav-item"
-              onClick={() => navigate('/collector/earnings')}
-            >
-              <span className="cd-nav-icon">💰</span>
-              My Earnings
-            </button>
-            <button
-              className="cd-nav-item"
-              onClick={() => navigate('/collector/matches')}
-            >
-              <span className="cd-nav-icon">🤝</span>
-              Buyer Matches
-            </button>
-          </nav>
-
-          <div className="cd-sidebar-footer">
-            <button className="cd-nav-item cd-nav-logout" onClick={handleLogout}>
-              <span className="cd-nav-icon">🚪</span>
-              Logout
-            </button>
-          </div>
-        </aside>
-
-        {/* ── Mobile top bar ── */}
-        <div className="cd-mobile-top">
-          <div className="cd-mobile-header">
-            <div className="cd-mobile-logo">
-              <div className="cd-mobile-logo-icon">♻</div>
-              Log Waste
-            </div>
-            <button className="cd-mobile-btn" onClick={() => navigate('/collector')}>
-              ← Back
-            </button>
-          </div>
-        </div>
-
-        {/* ── Main content ── */}
-        <div className="cd-content">
+      <AppLayout active="logNew" maxWidth={700}>
           {!isOnline && (
             <div className="ln-offline-banner">
-              You're offline — this log will sync automatically when you're back online
+              {t('logNew.offlineBanner')}
             </div>
           )}
-
-          <main className="ln-main">
 
             {error   && <div className="ln-error">{error}</div>}
             {success && <div className="ln-success">{success}</div>}
 
+            <div className="ln-step-indicator">
+              {STEPS.map((key, i) => (
+                <span
+                  key={key}
+                  className={`ln-step-dot${i === step ? ' active' : i < step ? ' done' : ''}`}
+                />
+              ))}
+              <span className="ln-step-label">
+                {t('logNew.stepIndicator', {
+                  step:  step + 1,
+                  total: STEPS.length,
+                  label: t(STEP_LABEL_KEYS[STEPS[step]]),
+                })}
+              </span>
+            </div>
+
             <div className="ln-card">
 
               {/* ── 1. Waste category ── */}
-              <div className="ln-section">
-                <span className="ln-label">Waste category</span>
+              <div className="ln-section" style={{ display: step === 0 ? undefined : 'none' }}>
+                <span className="ln-label">{t('logNew.stepCategory')}</span>
                 <div className="ln-cat-row">
                   {CATEGORIES.map(cat => (
                     <button
@@ -820,15 +697,15 @@ export default function LogNew() {
                       onClick={() => setForm(f => ({ ...f, category: cat.key }))}
                     >
                       <span className="ln-cat-icon">{cat.icon}</span>
-                      <span className="ln-cat-label">{cat.label}</span>
+                      <span className="ln-cat-label">{t(`categories.${cat.key}`)}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* ── 2. Weight stepper ── */}
-              <div className="ln-section">
-                <span className="ln-label">Estimated weight (kg)</span>
+              <div className="ln-section" style={{ display: step === 1 ? undefined : 'none' }}>
+                <span className="ln-label">{t('logNew.weightLabel')}</span>
                 <div className="ln-stepper">
                   <button className="ln-step-btn" onClick={() => adjustWeight(-1)}>−</button>
                   <div className="ln-step-divider" />
@@ -846,8 +723,11 @@ export default function LogNew() {
               </div>
 
               {/* ── 3. Location ── */}
-              <div className="ln-section">
-                <span className="ln-label">Location</span>
+              <div className="ln-section" style={{ display: step === 2 ? undefined : 'none' }}>
+                <div className="ln-step-title-row">
+                  <span className="ln-label" style={{ marginBottom: 0 }}>{t('logNew.locationLabel')}</span>
+                  <Tooltip text={t('logNew.locationTooltip')} />
+                </div>
                 <div className="ln-map-wrap">
                   <div ref={mapContainerRef} />
                 </div>
@@ -856,14 +736,14 @@ export default function LogNew() {
                   onClick={() => { if (!gpsLoading) captureGPS(); }}
                 >
                   {gpsLoading ? (
-                    'Getting location…'
+                    t('logNew.gpsGetting')
                   ) : hasGPS ? (
                     <>
                       📍 {parseFloat(form.latitude).toFixed(4)}, {parseFloat(form.longitude).toFixed(4)}
-                      {' '}— tap to adjust
+                      {' '}{t('logNew.gpsTapAdjust')}
                     </>
                   ) : (
-                    '📍 Tap to capture location'
+                    t('logNew.gpsTapCapture')
                   )}
                 </div>
 
@@ -871,7 +751,7 @@ export default function LogNew() {
 
                 <div className="ln-search-divider">
                   <div className="ln-search-divider-line" />
-                  <span className="ln-search-divider-text">OR SEARCH BY PLACE NAME</span>
+                  <span className="ln-search-divider-text">{t('logNew.searchDivider')}</span>
                   <div className="ln-search-divider-line" />
                 </div>
 
@@ -882,7 +762,7 @@ export default function LogNew() {
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); } }}
-                    placeholder="e.g. Kibera, Nairobi"
+                    placeholder={t('logNew.searchPlaceholder')}
                   />
                   <button
                     type="button"
@@ -890,7 +770,7 @@ export default function LogNew() {
                     onClick={handleSearch}
                     disabled={searching}
                   >
-                    {searching ? '…' : 'Search'}
+                    {searching ? t('logNew.searchButtonBusy') : t('logNew.searchButton')}
                   </button>
                 </div>
 
@@ -924,13 +804,13 @@ export default function LogNew() {
                   className="ln-manual-toggle"
                   onClick={() => setShowManual(s => !s)}
                 >
-                  {showManual ? '↑ Hide manual entry' : 'Enter coordinates manually'}
+                  {showManual ? t('logNew.manualToggleHide') : t('logNew.manualToggleShow')}
                 </button>
 
                 {showManual && (
                   <div className="ln-manual-row">
                     <div>
-                      <label className="ln-manual-label">Latitude</label>
+                      <label className="ln-manual-label">{t('logNew.manualLatitude')}</label>
                       <input
                         className="ln-manual-input"
                         type="number"
@@ -941,7 +821,7 @@ export default function LogNew() {
                       />
                     </div>
                     <div>
-                      <label className="ln-manual-label">Longitude</label>
+                      <label className="ln-manual-label">{t('logNew.manualLongitude')}</label>
                       <input
                         className="ln-manual-input"
                         type="number"
@@ -956,33 +836,41 @@ export default function LogNew() {
               </div>
 
               {/* ── 4. Notes (optional) ── */}
-              <div className="ln-section">
+              <div className="ln-section" style={{ display: step === 3 ? undefined : 'none' }}>
                 <span className="ln-label">
-                  Notes <span className="ln-optional">(optional)</span>
+                  {t('logNew.notesLabel')} <span className="ln-optional">({t('common.optional')})</span>
                 </span>
                 <textarea
                   className="ln-notes"
                   value={form.notes}
                   onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                  placeholder="Any additional details about this collection…"
+                  placeholder={t('logNew.notesPlaceholder')}
                   rows={2}
                 />
               </div>
 
             </div>
 
-            <button
-              className="ln-submit"
-              onClick={handleSubmit}
-              disabled={!canSubmit}
-            >
-              {submitting ? 'Submitting…' : 'Submit waste log'}
-            </button>
+            {stepWarning && <div className="ln-step-warn">{stepWarning}</div>}
 
-          </main>
-        </div>
+            <div className="ln-wizard-nav">
+              {step > 0 && (
+                <button className="ln-back-btn" onClick={goBack}>← {t('common.back')}</button>
+              )}
+              {step < STEPS.length - 1 ? (
+                <button className="ln-next-btn" onClick={goNext}>{t('common.next')} →</button>
+              ) : (
+                <button
+                  className="ln-submit"
+                  onClick={handleSubmit}
+                  disabled={!canSubmit}
+                >
+                  {submitting ? t('logNew.submitting') : t('logNew.submitButton')}
+                </button>
+              )}
+            </div>
 
-      </div>
+      </AppLayout>
     </>
   );
 }

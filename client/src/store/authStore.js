@@ -28,7 +28,7 @@ export const useAuthStore = create(
         } catch (err) {
           const message = err.response?.data?.error || 'Login failed.';
           set({ loading: false, error: message });
-          throw new Error(message);
+          throw new Error(message, { cause: err });
         }
       },
 
@@ -52,7 +52,7 @@ export const useAuthStore = create(
             || err.response?.data?.errors?.[0]?.msg
             || 'Registration failed.';
           set({ loading: false, error: message });
-          throw new Error(message);
+          throw new Error(message, { cause: err });
         }
       },
 

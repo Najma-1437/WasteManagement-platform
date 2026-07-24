@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../api/axiosClient';
 
 const C = {
@@ -11,11 +12,11 @@ const C = {
 };
 
 const DISPUTE_REASONS = [
-  { key: 'wrong_weight',   label: 'Wrong weight' },
-  { key: 'wrong_category', label: 'Wrong category' },
-  { key: 'no_show',        label: 'No-show' },
-  { key: 'payment_issue',  label: 'Payment issue' },
-  { key: 'other',          label: 'Other' },
+  { key: 'wrong_weight',   labelKey: 'reasonWrongWeight' },
+  { key: 'wrong_category', labelKey: 'reasonWrongCategory' },
+  { key: 'no_show',        labelKey: 'reasonNoShow' },
+  { key: 'payment_issue',  labelKey: 'reasonPaymentIssue' },
+  { key: 'other',          labelKey: 'reasonOther' },
 ];
 
 const css = `
@@ -99,6 +100,7 @@ const css = `
  * party membership and the disputable statuses.
  */
 export default function DisputeModal({ logId, context, onClose, onDisputed }) {
+  const { t } = useTranslation();
   const [reason, setReason]         = useState('');
   const [details, setDetails]       = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -106,7 +108,7 @@ export default function DisputeModal({ logId, context, onClose, onDisputed }) {
 
   const handleSubmit = async () => {
     if (!reason) {
-      setError('Select a reason for the dispute.');
+      setError(t('disputeModal.reasonRequired'));
       return;
     }
     setError('');
@@ -118,7 +120,7 @@ export default function DisputeModal({ logId, context, onClose, onDisputed }) {
       });
       onDisputed(res.data.log);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to raise dispute. Try again.');
+      setError(err.response?.data?.error || t('disputeModal.submitFailed'));
       setSubmitting(false);
     }
   };
@@ -129,55 +131,54 @@ export default function DisputeModal({ logId, context, onClose, onDisputed }) {
       <div className="dm-overlay" onClick={onClose}>
         <div className="dm-modal" onClick={e => e.stopPropagation()}>
           <div className="dm-header">
-            <p className="dm-title">⚠ Raise a dispute</p>
+            <p className="dm-title">{t('disputeModal.title')}</p>
             <button className="dm-close" onClick={onClose}>✕</button>
           </div>
           {context && <p className="dm-sub">{context}</p>}
 
           <div className="dm-warn">
-            This flags the record for admin review and pauses the transaction
-            until it's resolved. The other party will be notified.
+            {t('disputeModal.warning')}
           </div>
 
           {error && <div className="dm-error">{error}</div>}
 
           <div className="dm-section">
-            <span className="dm-label">What's the problem?</span>
+            <span className="dm-label">{t('disputeModal.reasonLabel')}</span>
             <select
               className="dm-select"
               value={reason}
               onChange={e => setReason(e.target.value)}
             >
-              <option value="" disabled>Select a reason…</option>
+              <option value="" disabled>{t('disputeModal.reasonPlaceholder')}</option>
               {DISPUTE_REASONS.map(r => (
-                <option key={r.key} value={r.key}>{r.label}</option>
+                <option key={r.key} value={r.key}>{t(`disputeModal.${r.labelKey}`)}</option>
               ))}
             </select>
           </div>
 
           <div className="dm-section">
             <span className="dm-label">
-              Details <span className="dm-optional">(optional)</span>
+              {t('disputeModal.detailsLabel')} <span className="dm-optional">({t('common.optional')})</span>
             </span>
             <textarea
               className="dm-details"
               rows={3}
               value={details}
               onChange={e => setDetails(e.target.value)}
-              placeholder="Anything that helps the admin understand what happened…"
+              placeholder={t('disputeModal.detailsPlaceholder')}
             />
           </div>
 
           <div className="dm-actions">
             <button className="dm-btn dm-btn-cancel" onClick={onClose} disabled={submitting}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               className="dm-btn dm-btn-submit"
               onClick={handleSubmit}
               disabled={submitting || !reason}
             >
-              {submitting ? 'Submitting…' : 'Raise dispute'}
+              {submitting ? t('disputeModal.submitting') : t('disputeModal.submitButton')}
             </button>
           </div>
         </div>

@@ -1,8 +1,10 @@
 // client/src/App.jsx
 import { useEffect }                              from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useTranslation }                         from 'react-i18next';
 import { useAuthStore, ROLE_DASHBOARDS }          from './store/authStore';
 import { syncQueuedLogs }                         from './utils/syncQueuedLogs';
+import { useToast }                               from './components/shared';
 
 // Pages
 import Landing      from './pages/Landing';
@@ -32,12 +34,25 @@ function PublicRoute({ children }) {
 }
 
 export default function App() {
+  const { show } = useToast();
+  const { t } = useTranslation();
+
   // Attempt to drain any offline-queued logs on every app load. Safe to
   // call for all users — syncQueuedLogs is a no-op when the queue is empty
   // or the user isn't authenticated (aborts on 401).
   useEffect(() => {
     syncQueuedLogs().catch(() => {});
   }, []);
+
+  // axiosClient sets this flag when a token refresh fails and it has to
+  // hard-redirect to "/" — it can't call useToast() itself (plain module,
+  // not a component), so surface the message here instead.
+  useEffect(() => {
+    if (sessionStorage.getItem('wm-session-expired')) {
+      sessionStorage.removeItem('wm-session-expired');
+      show(t('toast.sessionExpired'), { tone: 'warning' });
+    }
+  }, [show, t]);
 
   return (
     <BrowserRouter>

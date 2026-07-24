@@ -60,8 +60,11 @@ api.interceptors.response.use(
         original.headers.Authorization = `Bearer ${data.accessToken}`;
         return api(original);
       } catch {
-        // Refresh failed — clear storage and go to landing page
+        // Refresh failed — clear storage and go to landing page. Flag it so
+        // App.jsx can show a toast on the next mount instead of bouncing
+        // the user silently (this module can't use the useToast() hook).
         localStorage.removeItem("auth-storage");
+        sessionStorage.setItem("wm-session-expired", "1");
         window.location.href = "/";
       }
     }

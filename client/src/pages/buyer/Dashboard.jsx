@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   getMyOffers, createOffer, updateOffer, deleteOffer,
   getMatches, getMyTransactions, confirmMatch, initiatePayment, confirmReceipt,
@@ -8,6 +9,7 @@ import { useAuthStore } from '../../store/authStore';
 import MapPicker from '../../components/MapPicker';
 import NotificationBell from '../../components/NotificationBell';
 import DisputeModal from '../../components/DisputeModal';
+import { ConfirmDialog, useToast } from '../../components/shared';
 
 const C = {
   primary: '#1F6F4A',
@@ -606,6 +608,7 @@ function timeAgo(dateStr) {
 }
 
 export default function BuyerDashboard() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState('offers');
   const [offers, setOffers] = useState([]);
   const [matches, setMatches] = useState([]);
@@ -633,6 +636,9 @@ export default function BuyerDashboard() {
   }
   const [payState, setPayState] = useState({ txId: null, phone: '', loading: false, sent: false });
   const [receiptState, setReceiptState] = useState({ txId: null, loading: false, error: '' });
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletingOffer, setDeletingOffer] = useState(false);
+  const { show } = useToast();
 
   useEffect(() => {
     Promise.all([getMyOffers(), getMatches(), getMyTransactions()])
@@ -641,8 +647,9 @@ export default function BuyerDashboard() {
         setMatches(matchesRes.data.matches);
         setTransactions(txRes.data.transactions);
       })
-      .catch(err => setError(err.response?.data?.error || 'Failed to load dashboard data'))
+      .catch(err => setError(err.response?.data?.error || t('buyerDashboard.loadFailed')))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleCreateOffer(e) {
@@ -659,7 +666,7 @@ export default function BuyerDashboard() {
       setShowForm(false);
       setForm({ category: 'plastic', price_per_kg: '', min_quantity_kg: '', zone: '', latitude: null, longitude: null });
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to create offer');
+      setError(err.response?.data?.error || t('buyerDashboard.createOfferFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -670,18 +677,24 @@ export default function BuyerDashboard() {
     try {
       const res = await updateOffer(offer.offer_id, { status: newStatus });
       setOffers(offers.map(o => o.offer_id === offer.offer_id ? res.data.offer : o));
+      if (res.data.warning) show(res.data.warning, { tone: 'warning' });
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to update offer');
+      setError(err.response?.data?.error || t('buyerDashboard.updateOfferFailed'));
     }
   }
 
-  async function handleDeleteOffer(offerId) {
-    if (!window.confirm('Delete this offer?')) return;
+  async function handleDeleteOffer() {
+    if (!deleteTarget) return;
+    setDeletingOffer(true);
     try {
-      await deleteOffer(offerId);
-      setOffers(offers.filter(o => o.offer_id !== offerId));
+      await deleteOffer(deleteTarget.offer_id);
+      setOffers(offers.filter(o => o.offer_id !== deleteTarget.offer_id));
+      setDeleteTarget(null);
+      show(t('toast.offerDeleted'), { tone: 'success' });
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to delete offer');
+      show(err.response?.data?.error || t('toast.offerDeleteFailed'), { tone: 'error' });
+    } finally {
+      setDeletingOffer(false);
     }
   }
 
@@ -693,7 +706,7 @@ export default function BuyerDashboard() {
       setTransactions(txRes.data.transactions);
       setTab('transactions');
     } catch (err) {
-      setError(err.response?.data?.error || 'Could not confirm match — it may already be taken');
+      setError(err.response?.data?.error || t('buyerDashboard.confirmMatchFailed'));
     }
   }
 
@@ -704,7 +717,7 @@ export default function BuyerDashboard() {
       await initiatePayment(transactionId, payState.phone);
       setPayState(s => ({ ...s, loading: false, sent: true }));
     } catch (err) {
-      setError(err.response?.data?.error || 'M-Pesa payment failed. Check your number and try again.');
+      setError(err.response?.data?.error || t('buyerDashboard.paymentFailed'));
       setPayState(s => ({ ...s, loading: false }));
     }
   }
@@ -720,22 +733,22 @@ export default function BuyerDashboard() {
       setReceiptState({
         txId: transactionId,
         loading: false,
-        error: err.response?.data?.error || 'Could not confirm receipt. The payout request may need to be retried.',
+        error: err.response?.data?.error || t('buyerDashboard.confirmReceiptFailed'),
       });
     }
   }
 
   const handleDisputed = (updated) => {
-    setTransactions(prev => prev.map(t =>
-      t.log_id === updated.log_id ? { ...t, log_status: updated.status } : t
+    setTransactions(prev => prev.map(tx =>
+      tx.log_id === updated.log_id ? { ...tx, log_status: updated.status } : tx
     ));
     setDisputing(null);
   };
 
   const NAV_TABS = [
-    { key: 'offers',       label: 'My Offers',    count: offers.length },
-    { key: 'matches',      label: 'Matches',       count: matches.length },
-    { key: 'transactions', label: 'Transactions',  count: transactions.length },
+    { key: 'offers',       label: t('buyerDashboard.navOffers'),       count: offers.length },
+    { key: 'matches',      label: t('buyerDashboard.navMatches'),      count: matches.length },
+    { key: 'transactions', label: t('buyerDashboard.navTransactions'), count: transactions.length },
   ];
 
   return (
@@ -750,19 +763,19 @@ export default function BuyerDashboard() {
               <div className="bd-sidebar-logo-icon">♻</div>
               WasteManagement
             </div>
-            <p className="bd-sidebar-logo-sub">Buyer Portal</p>
+            <p className="bd-sidebar-logo-sub">{t('buyerDashboard.portalLabel')}</p>
           </div>
 
           <nav className="bd-sidebar-nav">
-            {NAV_TABS.map(t => (
+            {NAV_TABS.map(item => (
               <button
-                key={t.key}
-                className={`bd-nav-item${tab === t.key ? ' active' : ''}`}
-                onClick={() => setTab(t.key)}
+                key={item.key}
+                className={`bd-nav-item${tab === item.key ? ' active' : ''}`}
+                onClick={() => setTab(item.key)}
               >
-                <span className="bd-nav-icon">{NAV_ICONS[t.key]}</span>
-                {t.label}
-                {t.count > 0 && <span className="bd-nav-badge">{t.count}</span>}
+                <span className="bd-nav-icon">{NAV_ICONS[item.key]}</span>
+                {item.label}
+                {item.count > 0 && <span className="bd-nav-badge">{item.count}</span>}
               </button>
             ))}
           </nav>
@@ -777,7 +790,7 @@ export default function BuyerDashboard() {
             <NotificationBell />
             <button className="bd-nav-item bd-nav-logout" onClick={handleLogout}>
               <span className="bd-nav-icon">🚪</span>
-              Logout
+              {t('common.logout')}
             </button>
           </div>
         </aside>
@@ -787,18 +800,18 @@ export default function BuyerDashboard() {
           <div className="bd-mobile-header">
             <div className="bd-logo">
               <div className="bd-logo-icon">♻</div>
-              Buyer Dashboard
+              {t('buyerDashboard.mobileTitle')}
             </div>
-            <button className="bd-btn-logout" onClick={handleLogout}>Logout</button>
+            <button className="bd-btn-logout" onClick={handleLogout}>{t('common.logout')}</button>
           </div>
           <div className="bd-mobile-tabs">
-            {NAV_TABS.map(t => (
+            {NAV_TABS.map(item => (
               <button
-                key={t.key}
-                className={`bd-mobile-tab${tab === t.key ? ' active' : ''}`}
-                onClick={() => setTab(t.key)}
+                key={item.key}
+                className={`bd-mobile-tab${tab === item.key ? ' active' : ''}`}
+                onClick={() => setTab(item.key)}
               >
-                {t.label}
+                {item.label}
               </button>
             ))}
           </div>
@@ -808,23 +821,23 @@ export default function BuyerDashboard() {
         <div className="bd-content">
           <main className="bd-main">
             <div className="bd-page-title">
-              <h1>Buyer Dashboard</h1>
-              <p>Manage your offers, view waste matches, and track transactions</p>
+              <h1>{t('buyerDashboard.pageTitle')}</h1>
+              <p>{t('buyerDashboard.pageSubtitle')}</p>
             </div>
 
             {/* Stats */}
             <div className="bd-stats">
               <div className="bd-stat">
                 <div className="bd-stat-value">{offers.length}</div>
-                <div className="bd-stat-label">Active Offers</div>
+                <div className="bd-stat-label">{t('buyerDashboard.statActiveOffers')}</div>
               </div>
               <div className="bd-stat">
                 <div className="bd-stat-value">{matches.length}</div>
-                <div className="bd-stat-label">Pending Matches</div>
+                <div className="bd-stat-label">{t('buyerDashboard.statPendingMatches')}</div>
               </div>
               <div className="bd-stat">
                 <div className="bd-stat-value">{transactions.length}</div>
-                <div className="bd-stat-label">Transactions</div>
+                <div className="bd-stat-label">{t('buyerDashboard.statTransactions')}</div>
               </div>
             </div>
 
@@ -832,7 +845,7 @@ export default function BuyerDashboard() {
 
             {loading ? (
               <div style={{ textAlign: 'center', color: C.muted, padding: '60px 0', fontSize: 14 }}>
-                Loading…
+                {t('buyerDashboard.loading')}
               </div>
             ) : (
               <>
@@ -840,56 +853,56 @@ export default function BuyerDashboard() {
                 {tab === 'offers' && (
                   <>
                     <div className="bd-toolbar">
-                      <h2>My Offers</h2>
+                      <h2>{t('buyerDashboard.myOffersTitle')}</h2>
                       <button className="bd-btn-primary" onClick={() => setShowForm(s => !s)}>
-                        {showForm ? '✕ Cancel' : '+ Post New Offer'}
+                        {showForm ? t('buyerDashboard.cancelForm') : t('buyerDashboard.postNewOffer')}
                       </button>
                     </div>
 
                     <div className={`bd-layout${showForm ? ' has-form' : ''}`}>
                       {showForm && (
                         <div className="bd-form-panel">
-                          <h3>New Offer</h3>
+                          <h3>{t('buyerDashboard.newOfferTitle')}</h3>
                           <form onSubmit={handleCreateOffer}>
-                            <label className="bd-label">Waste type</label>
+                            <label className="bd-label">{t('buyerDashboard.wasteTypeLabel')}</label>
                             <select
                               className="bd-input"
                               value={form.category}
                               onChange={e => setForm({ ...form, category: e.target.value })}
                             >
-                              {WASTE_TYPES.map(w => <option key={w} value={w}>{w}</option>)}
+                              {WASTE_TYPES.map(w => <option key={w} value={w}>{t(`categories.${w}`)}</option>)}
                             </select>
 
                             <div className="bd-form-row">
                               <div>
-                                <label className="bd-label">Price per kg (KES)</label>
+                                <label className="bd-label">{t('buyerDashboard.pricePerKgLabel')}</label>
                                 <input
                                   className="bd-input" type="number" min="0" step="0.01" required
-                                  placeholder="e.g. 25"
+                                  placeholder={t('buyerDashboard.pricePerKgPlaceholder')}
                                   value={form.price_per_kg}
                                   onChange={e => setForm({ ...form, price_per_kg: e.target.value })}
                                 />
                               </div>
                               <div>
-                                <label className="bd-label">Min quantity (kg)</label>
+                                <label className="bd-label">{t('buyerDashboard.minQuantityLabel')}</label>
                                 <input
                                   className="bd-input" type="number" min="0" step="0.1"
-                                  placeholder="Optional"
+                                  placeholder={t('buyerDashboard.minQuantityPlaceholder')}
                                   value={form.min_quantity_kg}
                                   onChange={e => setForm({ ...form, min_quantity_kg: e.target.value })}
                                 />
                               </div>
                             </div>
 
-                            <label className="bd-label">Zone / area</label>
+                            <label className="bd-label">{t('buyerDashboard.zoneLabel')}</label>
                             <input
                               className="bd-input" type="text" required
-                              placeholder="e.g. Kibera, Nairobi"
+                              placeholder={t('buyerDashboard.zonePlaceholder')}
                               value={form.zone}
                               onChange={e => setForm({ ...form, zone: e.target.value })}
                             />
 
-                            <label className="bd-label">Pickup location (optional)</label>
+                            <label className="bd-label">{t('buyerDashboard.pickupLocationLabel')}</label>
                             <MapPicker
                               onSelect={({ lat, lng }) => setForm({ ...form, latitude: lat, longitude: lng })}
                               defaultToGPS
@@ -897,10 +910,10 @@ export default function BuyerDashboard() {
 
                             <div className="bd-form-actions">
                               <button type="button" className="bd-btn-cancel" onClick={() => setShowForm(false)}>
-                                Cancel
+                                {t('common.cancel')}
                               </button>
                               <button type="submit" className="bd-btn-submit" disabled={submitting}>
-                                {submitting ? 'Posting…' : 'Post Offer'}
+                                {submitting ? t('buyerDashboard.postingOffer') : t('buyerDashboard.postOfferButton')}
                               </button>
                             </div>
                           </form>
@@ -909,7 +922,7 @@ export default function BuyerDashboard() {
 
                       <div className="bd-grid">
                         {offers.length === 0 ? (
-                          <EmptyState icon="📋" text="No offers posted yet." sub="Click 'Post New Offer' to get started." />
+                          <EmptyState icon="📋" text={t('buyerDashboard.noOffersYet')} sub={t('buyerDashboard.noOffersSub')} />
                         ) : (
                           offers.map(offer => (
                             <div key={offer.offer_id} className="bd-card">
@@ -929,13 +942,13 @@ export default function BuyerDashboard() {
                                   className="bd-btn-sm bd-btn-sm-green"
                                   onClick={() => handleToggleStatus(offer)}
                                 >
-                                  {offer.status === 'active' ? 'Deactivate' : 'Activate'}
+                                  {offer.status === 'active' ? t('buyerDashboard.deactivate') : t('buyerDashboard.activate')}
                                 </button>
                                 <button
                                   className="bd-btn-sm bd-btn-sm-red"
-                                  onClick={() => handleDeleteOffer(offer.offer_id)}
+                                  onClick={() => setDeleteTarget(offer)}
                                 >
-                                  Delete
+                                  {t('common.delete')}
                                 </button>
                               </div>
                             </div>
@@ -950,11 +963,11 @@ export default function BuyerDashboard() {
                 {tab === 'matches' && (
                   <>
                     <div className="bd-toolbar">
-                      <h2>Waste Matches</h2>
+                      <h2>{t('buyerDashboard.wasteMatchesTitle')}</h2>
                     </div>
                     <div className="bd-grid">
                       {matches.length === 0 ? (
-                        <EmptyState icon="🔍" text="No matching waste logs right now." sub="Matches appear when a collector's log aligns with your offers." />
+                        <EmptyState icon="🔍" text={t('buyerDashboard.noMatchesYet')} sub={t('buyerDashboard.noMatchesSub')} />
                       ) : (
                         matches.map(m => (
                           <div key={m.log_id} className="bd-card">
@@ -976,7 +989,7 @@ export default function BuyerDashboard() {
                               className="bd-btn-confirm"
                               onClick={() => handleConfirmMatch(m.log_id, m.offer_id)}
                             >
-                              Confirm Interest
+                              {t('buyerDashboard.confirmInterest')}
                             </button>
                           </div>
                         ))
@@ -989,44 +1002,44 @@ export default function BuyerDashboard() {
                 {tab === 'transactions' && (
                   <>
                     <div className="bd-toolbar">
-                      <h2>Transactions</h2>
+                      <h2>{t('buyerDashboard.transactionsTitle')}</h2>
                     </div>
                     <div className="bd-grid">
                       {transactions.length === 0 ? (
-                        <EmptyState icon="🧾" text="No transactions yet." sub="Confirmed matches will appear here once processed." />
+                        <EmptyState icon="🧾" text={t('buyerDashboard.noTransactionsYet')} sub={t('buyerDashboard.noTransactionsSub')} />
                       ) : (
-                        transactions.map(t => (
-                          <div key={t.transaction_id} className="bd-card">
+                        transactions.map(tx => (
+                          <div key={tx.transaction_id} className="bd-card">
                             <div className="bd-card-header">
                               <div>
-                                <p className="bd-card-title">{t.category} · {t.weight_kg}kg</p>
-                                <p className="bd-card-sub">{t.collector_name}</p>
+                                <p className="bd-card-title">{tx.category} · {tx.weight_kg}kg</p>
+                                <p className="bd-card-sub">{tx.collector_name}</p>
                               </div>
-                              <StatusPill status={t.status} />
+                              <StatusPill status={tx.status} />
                             </div>
                             <div className="bd-card-meta">
                               <span style={{ fontWeight: 700, color: C.primary, fontSize: 15 }}>
-                                KES {t.amount}
+                                KES {tx.amount}
                               </span>
-                              {t.mpesa_receipt && (
+                              {tx.mpesa_receipt && (
                                 <span style={{ color: C.primary, fontSize: 13 }}>
-                                  Receipt: {t.mpesa_receipt}
+                                  {t('buyerDashboard.receiptLabel')}: {tx.mpesa_receipt}
                                 </span>
                               )}
                             </div>
 
-                            {t.status === 'pending' && (
-                              payState.txId === t.transaction_id ? (
+                            {tx.status === 'pending' && (
+                              payState.txId === tx.transaction_id ? (
                                 payState.sent ? (
                                   <p style={{ margin: '12px 0 0', fontSize: 13, color: C.primary, fontWeight: 600, textAlign: 'center' }}>
-                                    M-Pesa prompt sent! Check your phone and enter your PIN.
+                                    {t('buyerDashboard.mpesaPromptSent')}
                                   </p>
                                 ) : (
                                   <div style={{ marginTop: 12 }}>
                                     <input
                                       className="bd-input"
                                       type="tel"
-                                      placeholder="Phone e.g. 0712345678"
+                                      placeholder={t('buyerDashboard.phonePlaceholder')}
                                       value={payState.phone}
                                       onChange={e => setPayState(s => ({ ...s, phone: e.target.value }))}
                                       style={{ marginBottom: 8 }}
@@ -1041,9 +1054,9 @@ export default function BuyerDashboard() {
                                           fontFamily: 'inherit',
                                         }}
                                         disabled={payState.loading || !payState.phone}
-                                        onClick={() => handlePayment(t.transaction_id)}
+                                        onClick={() => handlePayment(tx.transaction_id)}
                                       >
-                                        {payState.loading ? 'Sending…' : 'Send M-Pesa Prompt'}
+                                        {payState.loading ? t('buyerDashboard.sendingPrompt') : t('buyerDashboard.sendMpesaPrompt')}
                                       </button>
                                       <button
                                         style={{
@@ -1054,7 +1067,7 @@ export default function BuyerDashboard() {
                                         }}
                                         onClick={() => setPayState({ txId: null, phone: '', loading: false, sent: false })}
                                       >
-                                        Cancel
+                                        {t('common.cancel')}
                                       </button>
                                     </div>
                                   </div>
@@ -1063,29 +1076,29 @@ export default function BuyerDashboard() {
                                 <button
                                   className="bd-btn-confirm"
                                   onClick={() => setPayState({
-                                    txId: t.transaction_id,
+                                    txId: tx.transaction_id,
                                     phone: user?.phone_number || '',
                                     loading: false,
                                     sent: false,
                                   })}
                                 >
-                                  Pay via M-Pesa
+                                  {t('buyerDashboard.payMpesa')}
                                 </button>
                               )
                             )}
 
-                            {t.status === 'escrowed' && (
+                            {tx.status === 'escrowed' && (
                               <>
                                 <button
                                   className="bd-btn-confirm"
-                                  onClick={() => handleConfirmReceipt(t.transaction_id)}
-                                  disabled={receiptState.loading && receiptState.txId === t.transaction_id}
+                                  onClick={() => handleConfirmReceipt(tx.transaction_id)}
+                                  disabled={receiptState.loading && receiptState.txId === tx.transaction_id}
                                 >
-                                  {receiptState.loading && receiptState.txId === t.transaction_id
-                                    ? 'Confirming…'
-                                    : 'Confirm Receipt & Pay Collector'}
+                                  {receiptState.loading && receiptState.txId === tx.transaction_id
+                                    ? t('buyerDashboard.confirmingReceipt')
+                                    : t('buyerDashboard.confirmReceiptPay')}
                                 </button>
-                                {receiptState.txId === t.transaction_id && receiptState.error && (
+                                {receiptState.txId === tx.transaction_id && receiptState.error && (
                                   <p style={{ margin: '8px 0 0', fontSize: 12, color: C.danger, textAlign: 'center' }}>
                                     {receiptState.error}
                                   </p>
@@ -1093,38 +1106,38 @@ export default function BuyerDashboard() {
                               </>
                             )}
 
-                            {t.status === 'payout_initiated' && (
+                            {tx.status === 'payout_initiated' && (
                               <p style={{ margin: '12px 0 0', fontSize: 13, color: C.muted, fontWeight: 600, textAlign: 'center' }}>
-                                Payout in progress…
+                                {t('buyerDashboard.payoutInProgress')}
                               </p>
                             )}
 
-                            {t.status === 'payout_failed' && (
+                            {tx.status === 'payout_failed' && (
                               <p style={{ margin: '12px 0 0', fontSize: 13, color: C.danger, fontWeight: 600, textAlign: 'center' }}>
-                                Payout failed{t.payout_error ? `: ${t.payout_error}` : '. Contact support.'}
+                                {t('buyerDashboard.payoutFailed')}{tx.payout_error ? `: ${tx.payout_error}` : t('buyerDashboard.payoutFailedContact')}
                               </p>
                             )}
 
-                            {t.status === 'released' && (
+                            {tx.status === 'released' && (
                               <p style={{ margin: '12px 0 0', fontSize: 13, color: C.primary, fontWeight: 600, textAlign: 'center' }}>
-                                ✓ Collector paid out successfully.
+                                {t('buyerDashboard.payoutReleased')}
                               </p>
                             )}
 
                             {/* Disputable only once payment is in escrow (log
                                 'confirmed') — an unpaid match should be
                                 declined, not disputed */}
-                            {t.log_status === 'confirmed' && (
+                            {tx.log_status === 'confirmed' && (
                               <button
                                 className="bd-dispute-btn"
-                                onClick={() => setDisputing(t)}
+                                onClick={() => setDisputing(tx)}
                               >
-                                ⚠ Raise Dispute
+                                {t('buyerDashboard.raiseDispute')}
                               </button>
                             )}
-                            {t.log_status === 'disputed' && (
+                            {tx.log_status === 'disputed' && (
                               <p className="bd-disputed-note">
-                                ⚠ Under dispute — an admin will review it.
+                                {t('buyerDashboard.underDispute')}
                               </p>
                             )}
                           </div>
@@ -1149,6 +1162,19 @@ export default function BuyerDashboard() {
           onDisputed={handleDisputed}
         />
       )}
+
+      {/* ── Delete offer confirmation ── */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        tone="warning"
+        title={t('confirmDialog.deleteOfferTitle')}
+        message={deleteTarget ? `This removes your ${deleteTarget.category} offer for ${deleteTarget.zone}.` : ''}
+        confirmLabel={t('confirmDialog.deleteOfferConfirm')}
+        cancelLabel={t('common.cancel')}
+        confirming={deletingOffer}
+        onConfirm={handleDeleteOffer}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

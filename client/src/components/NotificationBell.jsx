@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../api/axiosClient';
+import { useToast } from './shared';
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -14,11 +16,17 @@ function timeAgo(dateStr) {
 export default function NotificationBell() {
   const [notifications, setNotifications] = useState([]);
   const [open, setOpen] = useState(false);
+  const { show } = useToast();
+  const { t } = useTranslation();
 
   useEffect(() => {
     api.get('/notifications')
       .then(res => setNotifications(res.data.notifications))
-      .catch(err => console.error('[NotificationBell] fetch error:', err.response?.data ?? err.message));
+      .catch(err => {
+        console.error('[NotificationBell] fetch error:', err.response?.data ?? err.message);
+        show(t('toast.notificationsLoadError'), { tone: 'info' });
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const unread = notifications.filter(n => !n.is_read).length;
@@ -82,7 +90,7 @@ export default function NotificationBell() {
             </span>
           )}
         </span>
-        Notifications
+        {t('nav.notifications')}
         {unread > 0 && (
           <span style={{
             marginLeft: 'auto',
@@ -135,7 +143,7 @@ export default function NotificationBell() {
               flexShrink: 0,
             }}>
               <span style={{ fontSize: 15, fontWeight: 700, color: '#1A1A1A' }}>
-                Notifications
+                {t('nav.notifications')}
               </span>
               <button
                 onClick={() => setOpen(false)}

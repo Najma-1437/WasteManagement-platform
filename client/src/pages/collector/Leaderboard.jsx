@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../store/authStore';
 import api from '../../api/axiosClient';
-import NotificationBell from '../../components/NotificationBell';
+import { AppLayout } from '../../components/shared';
 
 function computeLevel(pts) {
   if (pts >= 3500) return 'Platinum';
@@ -23,109 +23,6 @@ const C = {
 
 const css = `
   *, *::before, *::after { box-sizing: border-box; }
-
-  .cd-root {
-    min-height: 100vh;
-    background: ${C.bg};
-    font-family: Inter, system-ui, -apple-system, sans-serif;
-    color: ${C.text};
-    display: flex;
-  }
-
-  /* ── Sidebar ── */
-  .cd-sidebar {
-    width: 240px;
-    flex-shrink: 0;
-    background: ${C.primary};
-    display: flex;
-    flex-direction: column;
-    position: fixed;
-    top: 0; left: 0; bottom: 0;
-    z-index: 200;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.12);
-  }
-  .cd-sidebar-header {
-    padding: 24px 20px 20px;
-    border-bottom: 1px solid rgba(255,255,255,0.12);
-  }
-  .cd-logo-mark {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 15px;
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 12px;
-  }
-  .cd-logo-icon {
-    width: 34px; height: 34px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 9px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 16px; flex-shrink: 0;
-  }
-  .cd-greeting {
-    font-size: 13px;
-    color: rgba(255,255,255,0.6);
-    font-weight: 400;
-    line-height: 1.4;
-  }
-  .cd-greeting strong { color: rgba(255,255,255,0.92); font-weight: 600; }
-
-  .cd-nav {
-    flex: 1;
-    padding: 16px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    overflow-y: auto;
-  }
-  .cd-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 11px 14px;
-    border-radius: 10px;
-    border: none;
-    background: transparent;
-    color: rgba(255,255,255,0.65);
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    text-align: left;
-    width: 100%;
-    transition: background 0.15s, color 0.15s;
-    font-family: inherit;
-  }
-  .cd-nav-item:hover  { background: rgba(255,255,255,0.1); color: #fff; }
-  .cd-nav-item.active { background: rgba(255,255,255,0.18); color: #fff; }
-  .cd-nav-item.soon   { opacity: 0.55; cursor: default; }
-  .cd-nav-item.soon:hover { background: transparent; color: rgba(255,255,255,0.65); }
-  .cd-nav-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
-  .cd-soon-badge {
-    margin-left: auto;
-    font-size: 10px;
-    font-weight: 700;
-    color: rgba(255,255,255,0.45);
-    background: rgba(255,255,255,0.1);
-    border-radius: 8px;
-    padding: 2px 7px;
-    letter-spacing: 0.3px;
-  }
-  .cd-sidebar-footer {
-    padding: 12px;
-    border-top: 1px solid rgba(255,255,255,0.12);
-  }
-  .cd-nav-logout { color: rgba(255,255,255,0.6); }
-  .cd-nav-logout:hover { background: rgba(255,255,255,0.08); color: #fff; }
-
-  /* ── Main content ── */
-  .cd-content { margin-left: 240px; flex: 1; min-width: 0; }
-  .cd-main {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 36px 32px 56px;
-  }
 
   /* ── Page header ── */
   .lb-header {
@@ -224,54 +121,6 @@ const css = `
     font-size: 14px;
   }
 
-  /* ── Mobile top bar ── */
-  .cd-mobile-top { display: none; }
-  .cd-mobile-header {
-    background: ${C.primary};
-    padding: 14px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .cd-mobile-logo {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 15px;
-    font-weight: 700;
-    color: #fff;
-  }
-  .cd-mobile-logo-icon {
-    width: 30px; height: 30px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
-  }
-  .cd-mobile-btn {
-    padding: 6px 14px;
-    border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.35);
-    background: transparent;
-    color: rgba(255,255,255,0.85);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.15s;
-  }
-  .cd-mobile-btn:hover { background: rgba(255,255,255,0.12); }
-
-  @media (max-width: 767px) {
-    .cd-sidebar    { display: none; }
-    .cd-content    { margin-left: 0; }
-    .cd-mobile-top { display: block; }
-    .cd-main       { padding: 20px 16px 48px; }
-  }
 `;
 
 function LevelBadge({ pts }) {
@@ -282,8 +131,8 @@ function LevelBadge({ pts }) {
 }
 
 export default function Leaderboard() {
-  const { user, logout } = useAuthStore();
-  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { user } = useAuthStore();
 
   const [board, setBoard]     = useState([]);
   const [ownEntry, setOwn]    = useState(null);
@@ -300,104 +149,34 @@ export default function Leaderboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  function handleLogout() {
-    navigate('/', { replace: true });
-    logout();
-  }
-
   const myUserId = user?.user_id;
 
   return (
     <>
       <style>{css}</style>
-      <div className="cd-root">
-
-        {/* ── Sidebar (desktop) ── */}
-        <aside className="cd-sidebar">
-          <div className="cd-sidebar-header">
-            <div className="cd-logo-mark">
-              <div className="cd-logo-icon">♻</div>
-              WasteManagement
-            </div>
-            <p className="cd-greeting">
-              Hello, <strong>{user?.name ?? 'Collector'}</strong>
-            </p>
-          </div>
-
-          <nav className="cd-nav">
-            <button className="cd-nav-item" onClick={() => navigate('/collector')}>
-              <span className="cd-nav-icon">📊</span>
-              Dashboard
-            </button>
-            <button className="cd-nav-item" onClick={() => navigate('/collector/log-new')}>
-              <span className="cd-nav-icon">➕</span>
-              Log Waste
-            </button>
-            <NotificationBell />
-            <button className="cd-nav-item active">
-              <span className="cd-nav-icon">🏆</span>
-              Leaderboard
-            </button>
-            <button
-              className="cd-nav-item"
-              onClick={() => navigate('/collector/earnings')}
-            >
-              <span className="cd-nav-icon">💰</span>
-              My Earnings
-            </button>
-            <button
-              className="cd-nav-item"
-              onClick={() => navigate('/collector/matches')}
-            >
-              <span className="cd-nav-icon">🤝</span>
-              Buyer Matches
-            </button>
-          </nav>
-
-          <div className="cd-sidebar-footer">
-            <button className="cd-nav-item cd-nav-logout" onClick={handleLogout}>
-              <span className="cd-nav-icon">🚪</span>
-              Logout
-            </button>
-          </div>
-        </aside>
-
-        {/* ── Mobile top bar ── */}
-        <div className="cd-mobile-top">
-          <div className="cd-mobile-header">
-            <div className="cd-mobile-logo">
-              <div className="cd-mobile-logo-icon">♻</div>
-              Leaderboard
-            </div>
-            <button className="cd-mobile-btn" onClick={handleLogout}>Logout</button>
-          </div>
-        </div>
-
-        {/* ── Main content ── */}
-        <div className="cd-content">
-          <main className="cd-main">
+      <AppLayout active="leaderboard" maxWidth={800}>
             <div className="lb-header">
-              <h1 className="lb-title">🏆 Leaderboard</h1>
-              <p className="lb-sub">Top collectors by total points earned · {POINTS_PER_KES} pts = KES 1 airtime</p>
+              <h1 className="lb-title">{t('leaderboard.title')}</h1>
+              <p className="lb-sub">{t('leaderboard.subtitle', { points: POINTS_PER_KES })}</p>
             </div>
 
             <div className="lb-card">
               {loading ? (
-                <div className="lb-empty">Loading…</div>
+                <div className="lb-empty">{t('leaderboard.loading')}</div>
               ) : error ? (
                 <div className="lb-empty" style={{ color: '#B3261E' }}>{error}</div>
               ) : board.length === 0 ? (
                 <div className="lb-empty">
-                  No points recorded yet — submit a waste log to appear here!
+                  {t('leaderboard.noPointsYet')}
                 </div>
               ) : (
                 <table className="lb-table">
                   <thead>
                     <tr>
-                      <th style={{ width: 56 }}>#</th>
-                      <th>Collector</th>
-                      <th style={{ textAlign: 'right' }}>Points</th>
-                      <th style={{ width: 100 }}>Level</th>
+                      <th style={{ width: 56 }}>{t('leaderboard.colRank')}</th>
+                      <th>{t('leaderboard.colCollector')}</th>
+                      <th style={{ textAlign: 'right' }}>{t('leaderboard.colPoints')}</th>
+                      <th style={{ width: 100 }}>{t('leaderboard.colLevel')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -421,7 +200,7 @@ export default function Leaderboard() {
                                 fontWeight: 700, background: '#E7F4EC',
                                 padding: '1px 6px', borderRadius: 8,
                               }}>
-                                You
+                                {t('leaderboard.you')}
                               </span>
                             )}
                           </td>
@@ -450,7 +229,7 @@ export default function Leaderboard() {
                               fontWeight: 700, background: '#E7F4EC',
                               padding: '1px 6px', borderRadius: 8,
                             }}>
-                              You
+                              {t('leaderboard.you')}
                             </span>
                           </td>
                           <td style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
@@ -464,10 +243,7 @@ export default function Leaderboard() {
                 </table>
               )}
             </div>
-          </main>
-        </div>
-
-      </div>
+      </AppLayout>
     </>
   );
 }

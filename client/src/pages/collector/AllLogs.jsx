@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../store/authStore';
+import { useTranslation } from 'react-i18next';
 import api from '../../api/axiosClient';
-import NotificationBell from '../../components/NotificationBell';
 import EditLogModal from '../../components/EditLogModal';
+import { AppLayout, ConfirmDialog, useToast } from '../../components/shared';
 
 const PAGE_SIZE = 20;
 
@@ -19,66 +19,6 @@ const C = {
 
 const css = `
   *, *::before, *::after { box-sizing: border-box; }
-
-  .cd-root {
-    min-height: 100vh;
-    background: ${C.bg};
-    font-family: Inter, system-ui, -apple-system, sans-serif;
-    color: ${C.text};
-    display: flex;
-  }
-
-  /* ── Sidebar ── */
-  .cd-sidebar {
-    width: 240px; flex-shrink: 0;
-    background: ${C.primary};
-    display: flex; flex-direction: column;
-    position: fixed; top: 0; left: 0; bottom: 0;
-    z-index: 200;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.12);
-  }
-  .cd-sidebar-header { padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.12); }
-  .cd-logo-mark {
-    display: flex; align-items: center; gap: 10px;
-    font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 12px;
-  }
-  .cd-logo-icon {
-    width: 34px; height: 34px; background: rgba(255,255,255,0.2);
-    border-radius: 9px; display: flex; align-items: center; justify-content: center;
-    font-size: 16px; flex-shrink: 0;
-  }
-  .cd-greeting { font-size: 13px; color: rgba(255,255,255,0.6); font-weight: 400; line-height: 1.4; }
-  .cd-greeting strong { color: rgba(255,255,255,0.92); font-weight: 600; }
-
-  .cd-nav {
-    flex: 1; padding: 16px 12px;
-    display: flex; flex-direction: column; gap: 2px; overflow-y: auto;
-  }
-  .cd-nav-item {
-    display: flex; align-items: center; gap: 11px;
-    padding: 11px 14px; border-radius: 10px; border: none;
-    background: transparent; color: rgba(255,255,255,0.65);
-    font-size: 14px; font-weight: 600; cursor: pointer;
-    text-align: left; width: 100%;
-    transition: background 0.15s, color 0.15s; font-family: inherit;
-  }
-  .cd-nav-item:hover  { background: rgba(255,255,255,0.1); color: #fff; }
-  .cd-nav-item.active { background: rgba(255,255,255,0.18); color: #fff; }
-  .cd-nav-item.soon   { opacity: 0.55; cursor: default; }
-  .cd-nav-item.soon:hover { background: transparent; color: rgba(255,255,255,0.65); }
-  .cd-nav-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
-  .cd-soon-badge {
-    margin-left: auto; font-size: 10px; font-weight: 700;
-    color: rgba(255,255,255,0.45); background: rgba(255,255,255,0.1);
-    border-radius: 8px; padding: 2px 7px; letter-spacing: 0.3px;
-  }
-  .cd-sidebar-footer { padding: 12px; border-top: 1px solid rgba(255,255,255,0.12); }
-  .cd-nav-logout { color: rgba(255,255,255,0.6); }
-  .cd-nav-logout:hover { background: rgba(255,255,255,0.08); color: #fff; }
-
-  /* ── Main content ── */
-  .cd-content { margin-left: 240px; flex: 1; min-width: 0; }
-  .cd-main { max-width: 1100px; margin: 0 auto; padding: 36px 32px 56px; }
 
   /* ── Page header ── */
   .al-page-header {
@@ -157,34 +97,6 @@ const css = `
   .al-page-btn:disabled { opacity: 0.4; cursor: default; }
   .al-page-info { font-size: 13px; color: ${C.muted}; min-width: 80px; text-align: center; }
 
-  /* ── Mobile top bar ── */
-  .cd-mobile-top { display: none; }
-  .cd-mobile-header {
-    background: ${C.primary}; padding: 14px 16px;
-    display: flex; align-items: center; justify-content: space-between;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12); position: sticky; top: 0; z-index: 100;
-  }
-  .cd-mobile-logo {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 15px; font-weight: 700; color: #fff;
-  }
-  .cd-mobile-logo-icon {
-    width: 30px; height: 30px; background: rgba(255,255,255,0.2); border-radius: 8px;
-    display: flex; align-items: center; justify-content: center; font-size: 14px;
-  }
-  .cd-mobile-btn {
-    padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.35);
-    background: transparent; color: rgba(255,255,255,0.85); font-size: 13px;
-    font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.15s;
-  }
-  .cd-mobile-btn:hover { background: rgba(255,255,255,0.12); }
-
-  @media (max-width: 767px) {
-    .cd-sidebar    { display: none; }
-    .cd-content    { margin-left: 0; }
-    .cd-mobile-top { display: block; }
-    .cd-main       { padding: 20px 16px 48px; }
-  }
 `;
 
 function formatLocation(lat, lng) {
@@ -207,13 +119,16 @@ function StatusPill({ status }) {
 }
 
 export default function AllLogs() {
-  const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const [logs, setLogs]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage]       = useState(1);
   const [editingLog, setEditingLog] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const { show } = useToast();
 
   useEffect(() => {
     api.get('/waste-logs/my')
@@ -222,13 +137,18 @@ export default function AllLogs() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleDelete = async (logId) => {
-    if (!confirm('Delete this log? This cannot be undone.')) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await api.delete(`/waste-logs/${logId}`);
-      setLogs(prev => prev.filter(l => l.log_id !== logId));
+      await api.delete(`/waste-logs/${deleteTarget.log_id}`);
+      setLogs(prev => prev.filter(l => l.log_id !== deleteTarget.log_id));
+      setDeleteTarget(null);
+      show(t('toast.logDeleted'), { tone: 'success' });
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to delete log.');
+      show(err.response?.data?.error || 'Failed to delete log.', { tone: 'error' });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -236,11 +156,6 @@ export default function AllLogs() {
     setLogs(prev => prev.map(l => (l.log_id === updated.log_id ? { ...l, ...updated } : l)));
     setEditingLog(null);
   };
-
-  function handleLogout() {
-    navigate('/', { replace: true });
-    logout();
-  }
 
   // Sort newest-first then paginate
   const sorted     = [...logs].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -251,84 +166,13 @@ export default function AllLogs() {
   return (
     <>
       <style>{css}</style>
-      <div className="cd-root">
-
-        {/* ── Sidebar (desktop) ── */}
-        <aside className="cd-sidebar">
-          <div className="cd-sidebar-header">
-            <div className="cd-logo-mark">
-              <div className="cd-logo-icon">♻</div>
-              WasteManagement
-            </div>
-            <p className="cd-greeting">
-              Hello, <strong>{user?.name ?? 'Collector'}</strong>
-            </p>
-          </div>
-
-          <nav className="cd-nav">
-            <button className="cd-nav-item" onClick={() => navigate('/collector')}>
-              <span className="cd-nav-icon">📊</span>
-              Dashboard
-            </button>
-            <button className="cd-nav-item" onClick={() => navigate('/collector/log-new')}>
-              <span className="cd-nav-icon">➕</span>
-              Log Waste
-            </button>
-            <button className="cd-nav-item active">
-              <span className="cd-nav-icon">📋</span>
-              My Logs
-            </button>
-            <NotificationBell />
-            <button className="cd-nav-item" onClick={() => navigate('/collector/leaderboard')}>
-              <span className="cd-nav-icon">🏆</span>
-              Leaderboard
-            </button>
-            <button
-              className="cd-nav-item"
-              onClick={() => navigate('/collector/earnings')}
-            >
-              <span className="cd-nav-icon">💰</span>
-              My Earnings
-            </button>
-            <button
-              className="cd-nav-item"
-              onClick={() => navigate('/collector/matches')}
-            >
-              <span className="cd-nav-icon">🤝</span>
-              Buyer Matches
-            </button>
-          </nav>
-
-          <div className="cd-sidebar-footer">
-            <button className="cd-nav-item cd-nav-logout" onClick={handleLogout}>
-              <span className="cd-nav-icon">🚪</span>
-              Logout
-            </button>
-          </div>
-        </aside>
-
-        {/* ── Mobile top bar ── */}
-        <div className="cd-mobile-top">
-          <div className="cd-mobile-header">
-            <div className="cd-mobile-logo">
-              <div className="cd-mobile-logo-icon">♻</div>
-              My Logs
-            </div>
-            <button className="cd-mobile-btn" onClick={() => navigate('/collector')}>
-              ← Dashboard
-            </button>
-          </div>
-        </div>
-
-        {/* ── Main content ── */}
-        <div className="cd-content">
-          <main className="cd-main">
+      <AppLayout active="logs">
 
             <div className="al-page-header">
-              <h1 className="al-page-title">My Waste Logs</h1>
+              <h1 className="al-page-title">{t('allLogs.pageTitle')}</h1>
               {!loading && (
                 <span className="al-log-count">
-                  {logs.length} log{logs.length !== 1 ? 's' : ''} total
+                  {t('allLogs.logCount', { count: logs.length })}
                 </span>
               )}
             </div>
@@ -337,12 +181,12 @@ export default function AllLogs() {
               {loading ? (
                 <div className="cd-empty">
                   <div className="cd-empty-icon">⏳</div>
-                  <p>Loading…</p>
+                  <p>{t('allLogs.loading')}</p>
                 </div>
               ) : logs.length === 0 ? (
                 <div className="cd-empty">
                   <div className="cd-empty-icon">📋</div>
-                  <p style={{ fontWeight: 600 }}>No waste logs yet.</p>
+                  <p style={{ fontWeight: 600 }}>{t('allLogs.noLogsYet')}</p>
                   <p>
                     <button
                       onClick={() => navigate('/collector/log-new')}
@@ -352,7 +196,7 @@ export default function AllLogs() {
                         fontFamily: 'inherit', padding: 0,
                       }}
                     >
-                      Submit your first log →
+                      {t('allLogs.submitFirstLog')}
                     </button>
                   </p>
                 </div>
@@ -362,11 +206,11 @@ export default function AllLogs() {
                     <table className="cd-table">
                       <thead>
                         <tr>
-                          <th>Type</th>
-                          <th>Weight</th>
-                          <th>Location</th>
-                          <th>Status</th>
-                          <th>Date</th>
+                          <th>{t('allLogs.colType')}</th>
+                          <th>{t('allLogs.colWeight')}</th>
+                          <th>{t('allLogs.colLocation')}</th>
+                          <th>{t('allLogs.colStatus')}</th>
+                          <th>{t('allLogs.colDate')}</th>
                           <th></th>
                         </tr>
                       </thead>
@@ -396,14 +240,14 @@ export default function AllLogs() {
                                   <button
                                     className="cd-edit-btn"
                                     onClick={() => setEditingLog(log)}
-                                    title="Edit log"
+                                    title={t('allLogs.editLog')}
                                   >
                                     ✎
                                   </button>
                                   <button
                                     className="cd-delete-btn"
-                                    onClick={() => handleDelete(log.log_id)}
-                                    title="Delete log"
+                                    onClick={() => setDeleteTarget(log)}
+                                    title={t('allLogs.deleteLog')}
                                   >
                                     🗑
                                   </button>
@@ -423,7 +267,7 @@ export default function AllLogs() {
                         onClick={() => setPage(p => Math.max(1, p - 1))}
                         disabled={currentPage === 1}
                       >
-                        ← Previous
+                        {t('allLogs.previous')}
                       </button>
                       <span className="al-page-info">
                         {currentPage} / {totalPages}
@@ -433,7 +277,7 @@ export default function AllLogs() {
                         onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                         disabled={currentPage === totalPages}
                       >
-                        Next →
+                        {t('allLogs.next')}
                       </button>
                     </div>
                   )}
@@ -441,10 +285,7 @@ export default function AllLogs() {
               )}
             </div>
 
-          </main>
-        </div>
-
-      </div>
+      </AppLayout>
 
       {/* ── Edit log modal ── */}
       {editingLog && (
@@ -454,6 +295,19 @@ export default function AllLogs() {
           onSaved={handleEditSaved}
         />
       )}
+
+      {/* ── Delete confirmation ── */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        tone="warning"
+        title={t('confirmDialog.deleteLogTitle')}
+        message={t('confirmDialog.deleteLogMessage')}
+        confirmLabel={t('confirmDialog.deleteLogConfirm')}
+        cancelLabel={t('common.cancel')}
+        confirming={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </>
   );
 }
